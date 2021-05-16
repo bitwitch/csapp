@@ -1,5 +1,10 @@
-#include <stdio.h> 
 #include <assert.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <stdio.h> 
+#include <stdlib.h>
+#include <string.h> // for memcpy
+
 
 /* 2.61 */
 int any_bit_1(int x) {
@@ -125,6 +130,7 @@ int leftmost_one(unsigned x) {
 }
 
 /* 2.67 */
+/*
 int bad_int_size_is_32() {
     // set msb of 32 bit machine
     int set_msb = 1 << 31;
@@ -144,7 +150,7 @@ int bad_int_size_is_32() {
     // according to the standard.
     
 }
-
+*/
 // B. Modify for any machine for which int is at least 32 bits
 int int_size_is_32() {
     int set_msb = 1 << 31;
@@ -223,9 +229,184 @@ int fits_bits(int x, int n) {
     return non_neg_will_fit || neg_will_fit;
 }
 
+/* 2.71 */
+typedef unsigned packed_t;
+
+int buggy_xbyte(packed_t word, int bytenum) {
+    return (word >> (bytenum << 3)) & 0xFF;
+}
+
+// A. This implementation fails to sign extend the number.
+
+//B. use only left and right shifts, and one subtraction
+// Extract byte from word, return as signed integer
+int xbyte(packed_t word, int bytenum) {
+    return (int) (word << ((3 - bytenum) << 3)) >> 24;
+}
+
+/* 2.72 */
+void buggy_copy_int(int val, void *buf, int maxbytes) {
+    if (maxbytes - sizeof(val) >= 0)
+        printf("copying\n");
+        memcpy(buf, (void *) &val, sizeof(val));
+}
+
+// A. Since size_t is an unsigned type, maxbytes gets implicitly converted to
+// an unsigned. When the subtraction takes place, if maxbytes is less than
+// sizeof(val), it will underflow into a large positive number. It will always
+// be >= 0.
+
+// B.
+void copy_int(int val, void *buf, int maxbytes) {
+    if (maxbytes - (int)sizeof(val) >= 0)
+        printf("copying\n");
+        memcpy(buf, (void *) &val, sizeof(val));
+}
+
+/* 2.73 */
+// addition that saturates to TMin or Tmax
+int saturating_add(int x, int y) {
+    int w = sizeof(int) << 3;
+
+    int sum = x + y;
+
+    int msb = 1 << (w - 1); // most sig bit
+
+    // HANDLE OVERFLOW
+    int high_bit = msb & (~x) & (~y) & sum;
+
+    int mask = high_bit >> (w - 1);
+
+    // if overflow, mask will be all ones, otherwise all zeros
+    // after applying the mask, set the most sig bit based on high_bit, this
+    // handles the overflow case setting the value to int max
+    sum = (sum | mask) ^ high_bit;
+
+    // HANDLE UNDERFLOW
+    high_bit = msb & x & y & ~sum;
+
+    mask = ~(high_bit >> (w - 1));
+
+    // if underflow, mask will will be all zeros, otherwise all ones
+    // after applying the mask, set the most sig bit based on high_bit, this
+    // handles the underflow case setting the value to int min
+    sum = (sum & mask) | high_bit;
+
+    return sum;
+}
+
+int simplified_saturating_add(int x, int y) {
+    int msb = INT_MIN;
+    int sum = x + y;
+
+    int overflow = (msb & ~x & ~y) && (msb & sum);
+    int underflow = (msb & x & y) && !(msb & sum);
+
+    (overflow && (sum = INT_MAX)) || (underflow && (sum = INT_MIN));
+
+    return sum;
+}
+
+/* 2.74 */
+// determine wheter arguments can be subtracted without overflow
+int tsub_okay(int x, int y) {
+    int mask = INT_MIN;
+    int diff = x - y;
+
+    // if x is pos and y is neg, and diff is neg - overflow
+    int pos_overflow = (~x & mask) && (y & mask) && (diff & mask);
+
+    // if x is neg and y is pos, and diff is pos - overflow
+    int neg_overflow = (x & mask) && (~y & mask) && (~diff & mask);
+
+    return !(pos_overflow || neg_overflow);
+}
+
+/* 2.75 */
+int signed_high_prod(int x, int y) {
+    int64_t prod = (int64_t) x * y;
+    return prod >> 32;
+}
+
+unsigned unsigned_high_prod(unsigned x, unsigned y) {
+    int mask = INT_MIN;
+
+    int y_contrib = 0;
+    int x_contrib = 0;
+
+    (x & mask) && (y_contrib = y);
+    (y & mask) && (x_contrib = x);
+
+    int high_prod = signed_high_prod(x, y);
+
+    return high_prod + y_contrib + x_contrib;
+}
+
+/* 2.76 */
+void *calloc(size_t nmemb, size_t size) {
+    if (nmemb == 0 || size == 0)
+        return NULL;
+
+    size_t total_size = nmemb * size;
+
+    // if overflow return null
+    if (total_size < nmemb || total_size < size)
+        return NULL;
+
+    void *memory = malloc(total_size);
+    memset(memory, 0, total_size);
+
+    return memory;
+}
+
+/* 2.77 */
+void problem_2_77(int x) {
+    int prod;
+
+    // A. K = 17
+    prod = (x << 4) + x;
+    assert(x * 17 == prod);
+
+    // B. K = -7
+    prod = x - (x << 3);
+    assert(x * -7 == prod);
+
+    // C. K = 60
+    prod = (x << 6) - (x << 2);
+    assert(x * 60 == prod);
+
+    // D. K = -112
+    prod = (x << 4) - (x << 7);
+    assert(x * -112 == prod);
+}
+
+/* 2.78 */
+// divide by power of 2. assume 0 <= k < w-1
+int divide_power2(int x, int k) {
+    int q = x >> k;
+
+    // for negative x
+    (x & INT_MIN) && (q = ((x + (1 << k) - 1) >> k));
+
+    return q;
+}
+
+/* 2.79 */
+int mul3div4(int x) {
+   // mul 3
+   int prod = (x << 2) - x;
+   // div 4
+   return divide_power2(prod, 2);
+}
+
+
+
+
+
 
 int main() {
 
+    /* 2.61 */
     printf("any bit 1\n");
     printf("0xFF --> %d\n", any_bit_1(0xFF));
     printf("0x01 --> %d\n", any_bit_1(0x01));
@@ -248,10 +429,11 @@ int main() {
     printf("0xFF654321 --> %d\n", any_bit_in_msb_0(0xFF654321));
     printf("\n");
 
+    /* 2.62 */
     printf("int shifts are arithmetic: %d\n", int_shifts_are_arithmetic());
     printf("\n");
 
-
+    /* 2.63 */
     printf("srl(0xFF000000, 8) --> %.8X\n", srl(0xFF000000, 8));
     printf("srl(0x0F000000, 8) --> %.8X\n", srl(0x0F000000, 8));
     printf("\n");
@@ -260,27 +442,32 @@ int main() {
     printf("sra(0x0F000000, 8) --> %.8X\n", sra(0x0F000000, 8));
     printf("\n");
 
+    /* 2.64 */
     printf("any odd one 0xAAAAAAAA --> %d\n", any_odd_one(0xAAAAAAAA));
     printf("any odd one 0xA0000000 --> %d\n", any_odd_one(0xA0000000));
     printf("any odd one 0x55555555 --> %d\n", any_odd_one(0x55555555));
     printf("\n");
 
+    /* 2.66 */
     assert(leftmost_one(0xFF00) == 0x8000);
     assert(leftmost_one(0x6600) == 0x4000);
     assert(leftmost_one(0x0) == 0x0);
     assert(leftmost_one(0x80000000) == 0x80000000);
 
-
+    /* 2.67 */
     assert(int_size_is_32());
     assert(any_int_size_is_32());
 
+    /* 2.68 */
     assert(lower_one_mask(6) == 0x3F);
     assert(lower_one_mask(17) == 0x1FFFF);
     assert(lower_one_mask(32) == 0xFFFFFFFF);
 
+    /* 2.69 */
     assert(rotate_left(0x12345678, 4) == 0x23456781);
     assert(rotate_left(0x12345678, 20) == 0x67812345);
 
+    /* 2.70 */
     assert(fits_bits(0xFF, 8) == 1);
     assert(fits_bits(0xFFF, 8) == 0);
     assert(fits_bits(0xFFFF, 16) == 1);
@@ -293,6 +480,74 @@ int main() {
     assert(fits_bits(0xFFFFFF64, 8) == 0);
     assert(fits_bits(0xFFFF8000, 16) == 1);
     assert(fits_bits(0xFFF80000, 16) == 0);
+
+    /* 2.71 */
+    assert(xbyte(0xABCDEF12, 2) == 0xFFFFFFCD);
+    assert(xbyte(0xFF000000, 3) == 0xFFFFFFFF);
+    assert(xbyte(0x12345678, 3) == 0x12);
+    assert(xbyte(0x12345678, 2) == 0x34);
+
+    /* 2.72 */
+    char buf[2]; // 2 bytes
+    // buggy_copy_int(69, buf, 2);
+    copy_int(69, buf, 2);
+
+    /* 2.73 */
+    assert(saturating_add(0x7, 0x8) == 0xF);
+    assert(saturating_add(0x7FFFFFFF, 0x7FFFFABC) == 0x7FFFFFFF);
+    assert(saturating_add(0xFFFFFE17, 0x4DD) == 0x2F4);
+    assert(saturating_add(0xFFFFFE5C, 0xFFFFFFBB) == 0xFFFFFE17);
+    assert(saturating_add(0x80000000, 0xFFFFFFFF) == 0x80000000);
+    assert(simplified_saturating_add(0x7, 0x8) == 0xF);
+    assert(simplified_saturating_add(0x7FFFFFFF, 0x7FFFFABC) == 0x7FFFFFFF);
+    assert(simplified_saturating_add(0xFFFFFE17, 0x4DD) == 0x2F4);
+    assert(simplified_saturating_add(0xFFFFFE5C, 0xFFFFFFBB) == 0xFFFFFE17);
+    assert(simplified_saturating_add(0x80000000, 0xFFFFFFFF) == 0x80000000);
+
+
+    /* 2.74 */
+    assert(tsub_okay(0x12345678, 0x0DCBA876) == 1);
+    assert(tsub_okay(0x12345678, 0xF8000000) == 1);
+    assert(tsub_okay(0x72345678, 0xC0000000) == 0);
+    assert(tsub_okay(0xC0000000, 0xFFF123BC) == 1);
+    assert(tsub_okay(0xFF000000, 0x0069ABBA) == 1);
+    assert(tsub_okay(0xC0000000, 0x72345678) == 0);
+
+    /* 2.75 */
+    assert(unsigned_high_prod(0x4CC90E3, 0x69) == 0x1);
+    assert(unsigned_high_prod(0x7CC90E3, 0xABBA) == 0x53B);
+    assert(unsigned_high_prod(0x7CC90E3, 0xC0FFEE) == 0x5E138);
+
+    /* 2.76 */
+    void *p1 = calloc(69, sizeof(int));
+    printf("p1 = %p\n", p1);
+    assert(p1 != NULL);
+    assert(calloc(0, sizeof(int)) == NULL);
+    assert(calloc(666, 0) == NULL);
+    assert(calloc(0xFFFFFFFFFFFFFFFF, 0x69) == NULL);
+
+    /* 2.77 */
+    problem_2_77(69);
+
+    /* 2.78 */
+    assert(divide_power2(6969, 8) == 27);
+    assert(divide_power2(666420, 7) == 5206);
+    assert(divide_power2(-666, 3) == -83);
+    assert(divide_power2(-58008, 8) == -226);
+
+    /* 2.79 */
+    assert(mul3div4(0x7FFFFFFF) == (int) 0x7FFFFFFF * 3 / 4);
+    assert(mul3div4(0x12345678) == (int) 0x12345678 * 3 / 4);
+    assert(mul3div4(0xC0FFEE) == (int) 0xC0FFEE * 3 / 4);
+    assert(mul3div4(0xFFFFABBA) == (int) 0xFFFFABBA * 3 / 4);
+
+
+
+
+
+
+
+    printf("Success\n");
 
     return 0;
 }
