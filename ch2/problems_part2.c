@@ -399,7 +399,57 @@ int mul3div4(int x) {
    return divide_power2(prod, 2);
 }
 
+/* 2.80 */
+int threefourths(int x) {
 
+    int w = sizeof(int) << 3;
+
+    int prod = (x << 2) - x;
+
+    int mask = INT_MIN | (INT_MIN >> 1);
+
+
+
+    // store the bits shifted out of range
+    // most significant 2 bits
+    int ms2b = x & mask;
+    
+    // determine effect on these bits of subtracting x 
+    // considering the 4 high bits (0-3), if bit 1 (from left) is 0 and bit 3 is 1
+    // then the 2 high bits will be affected
+
+    /*
+     * Somehow the the subtraction doesn't affect the high bits that get shifted out,
+     * I don't really understand this. For example in the case where x is INT_MIN, when
+     * you subtract x from (x << 2), you would need to borrow from the higher order bits
+     * which would affect them, but the math does not work out when you do this. The high
+     * bits just get put back in no matter what, unchanged. 
+     *
+    !(((unsigned) INT_MIN >> 2) & x) && 
+        (INT_MIN & x) && 
+        (ms2b = ((ms2b >> (w - 2)) - 1) << (w - 2));
+    */
+
+    // perform division
+    int result = divide_power2(prod, 2);
+
+    // set the high bits 
+    result &= ~mask;
+    result |= ms2b;
+
+    return result;
+}
+
+/* 2.81 */
+void problem_2_81(int j, int k) {
+    // A.  (w - k) ones followed by k zeros
+    int A = ~((1 << k) - 1);
+     
+    // B.  (w - k - j) zeros, then k ones, then j zeros
+    int B = ((1 << k) - 1) << j;
+
+    printf("j = %d, k = %d\nA = %X\nB = %X\n\n", j, k, A, B);
+}
 
 
 
@@ -520,7 +570,7 @@ int main() {
 
     /* 2.76 */
     void *p1 = calloc(69, sizeof(int));
-    printf("p1 = %p\n", p1);
+    printf("p1 = %p\n\n", p1);
     assert(p1 != NULL);
     assert(calloc(0, sizeof(int)) == NULL);
     assert(calloc(666, 0) == NULL);
@@ -541,9 +591,20 @@ int main() {
     assert(mul3div4(0xC0FFEE) == (int) 0xC0FFEE * 3 / 4);
     assert(mul3div4(0xFFFFABBA) == (int) 0xFFFFABBA * 3 / 4);
 
+    /* 2.80 */
+    assert(threefourths(0x1) == 0x0);
+    assert(threefourths(0x4) == 0x3);
+    assert(threefourths(0x9) == 0x6);
+    assert(threefourths(0xFFFFFFBB) == 0xFFFFFFCD);
+    assert(threefourths(0xFFFFFC88) == 0xFFFFFD66);
+    assert(threefourths(0x7FFFFFFF) == 0x5FFFFFFF);
+    assert(threefourths(0x80000000) == 0xA0000000);
+    assert(threefourths(0x80000003) == 0xA0000003);
 
-
-
+    /* 2.81 */
+    problem_2_81(6, 9);
+    problem_2_81(4, 13);
+    problem_2_81(22, 3);
 
 
 
