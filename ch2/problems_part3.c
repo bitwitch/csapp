@@ -6,6 +6,8 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <time.h>
+
 typedef unsigned float_bits;
 
 unsigned f2u(float x) {
@@ -100,7 +102,7 @@ float_bits float_twice(float_bits f) {
     float_bits frac = f & 0x7FFFFF;
 
     // if f is NaN or infinity return f
-    if ( (exp == 0xFF && frac) || (exp == 0xFF) )
+    if (exp == 0xFF)
         return f;
 
     if (exp == 0) {
@@ -128,40 +130,63 @@ float_bits float_half(float_bits f) {
     float_bits frac = f & 0x7FFFFF;
 
     // if f is NaN or infinity return f
-    if ( (exp == 0xFF && frac) || (exp == 0xFF) )
+    if (exp == 0xFF)
         return f;
 
     if (exp == 0) {
     // denormalized
-        if (frac & 1) {
-            frac >>= 1;
-            // round to even
-            if (frac & 1)
-                frac++;
-        } else {
-            frac >>= 1;
-        }
+        float_bits lost_bit = frac & 1;
+        frac >>= 1;
+        if ((frac & 1) && lost_bit) 
+            frac++;
                 
     } else {
     // normalized
         if (exp == 1) {
-            // treat as denormalized but shift the 1 from exp to the right into frac
-            if (frac & 1) {
-                frac >>= 1;
-                frac |= 1 << 22;
-                // round to even
-                if (frac & 1)
-                    frac++;
-            } else {
-                frac >>= 1;
-                frac |= 1 << 22;
-            }
+            float_bits lost_bit = frac & 1;
+            frac >>= 1;
+            frac |= 1 << 22;
+            if ( (frac & 1) && lost_bit )
+                frac++;
         } 
 
         exp--;
     }
     
     return (sign << 31) | (exp << 23) | frac;
+}
+
+/* 2.96 */
+int float_f2i(float_bits f) {
+    float_bits sign = f >> 31;
+    float_bits exp  = (f >> 23) & 0xFF;
+    float_bits frac = f & 0x7FFFFF;
+
+     // if NaN, infinity, or out of int range
+    if (exp > 157)
+        return 0x80000000;
+
+    // if denormalized or small, return 0
+    if (exp < 127)
+        return 0;
+
+    // add in the implicit one from the mantissa
+    float_bits mantissa = frac | (1 << 23);
+
+    // get the integer portion of the resulting float
+    int i;
+    if (exp - 127 > 23) {
+        i = mantissa << (exp - 127 - 23);
+    } else {
+        i = mantissa >> (23 - (exp - 127));
+    }
+
+    // negative
+    if (sign) {
+        i = (i ^ ~0) + 1;
+    }
+
+    return i;
 }
 
 
@@ -245,14 +270,8 @@ int main() {
     while (0) { // disable to avoid long processing
 
         if ((u & 0x7FFFFFFF) < 0x7F800001) {
-            float_bits using_func = float_half(u);
-            unsigned using_float = f2u(0.5f * u2f(u));
-            if (using_func != using_float) {
-                printf("u = %X  func: %X  float: %X\n", u, using_func, using_float);
-            }
             assert( float_half(u) == f2u(0.5f * u2f(u)) );
         } else  { // if NaN
-            if (float_half(u) != u) printf("error in NaN calc\n");
             assert( float_half(u) == u );
         }
 
@@ -260,6 +279,31 @@ int main() {
 
         u++;
     }
+
+    /* 2.96 */
+    u = 0;
+    while (1) { // disable to avoid long processing
+
+        if ((u & 0x7FFFFFFF) < 0x7F800001) {
+            int using_func = float_f2i(u); 
+            int using_cast = (int) u2f(u); 
+            if (using_func != using_cast) {
+                printf("u = %X  func: %d (%X)  cast: %d (%X)\n", u, using_func, using_func, using_cast, using_cast);
+            }
+            assert( float_f2i(u) == (int) u2f(u) );
+        } else  { // if NaN
+            int using_func = float_f2i(u); 
+            if (using_func != 0x80000000) {
+                printf("u = %X  func: %d (%X)  != 0x80000000\n", u, using_func, using_func);
+            }
+            assert( float_f2i(u) == 0x80000000 );
+        }
+
+        if (u == 0xFFFFFFFF) break;
+
+        u++;
+    }
+
 
 
 
