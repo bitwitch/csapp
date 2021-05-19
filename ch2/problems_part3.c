@@ -3,6 +3,7 @@
  */
 
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -189,6 +190,97 @@ int float_f2i(float_bits f) {
     return i;
 }
 
+/* 2.97 */
+float_bits float_i2f(int i) {
+    float_bits sign, exp, frac;
+
+    if (i > 0) {
+    // pos
+        frac = i;
+        sign = 0;
+    } else if (i == INT_MIN) {
+    // min
+        frac = i;
+        sign = 1;
+    } else if (i < 0) {
+    // neg
+        i = (i ^ ~0) + 1;
+        frac = i;
+        sign = 1;
+    } else {
+    // zero
+        return 0;
+    }
+
+    // clear out high 9 bits since only 23 fit in frac
+    frac &= 0x007FFFFF;
+
+    // find the leftmost one in the low 23 bits
+    // low_shift is how many zeros (from the left) are before the first 1
+    unsigned mask = 0x400000;
+    int low_shift = 0;
+    for (; low_shift < 23 && !(frac & mask); low_shift++, mask >>= 1) { }
+
+    // find leftmost one in the high 9 bits
+    mask = 0x80000000;
+    int high_shift = 0;
+    for (; high_shift < 9 && !(i & mask); high_shift++, mask >>= 1) { }
+
+
+    // E = e - bias, bias = 127 for IEEE single precision float
+    int E;
+
+    if (high_shift == 9) {
+    // no ones in high 9 bits
+        E = 22 - low_shift;
+        frac <<= (low_shift + 1);
+        // clear out overflow
+        frac &= 0x007FFFFF;
+
+    } else {
+        int exp_increase = 8 - high_shift;
+        E = 23 + exp_increase;
+
+        if (exp_increase > 0) {
+            // round_bits is used to test if halfway between two numbers 
+            // for rounding to even
+            int round_bits = frac & ((1 << exp_increase) - 1);
+
+            // round_bit is used to test if the number should round up in 
+            // the non halfway case
+            int round_bit = frac & (1 << (exp_increase - 1));
+
+            frac = i >> exp_increase;
+
+            // clear out high 9 bits since only 23 fit in frac
+            frac &= 0x007FFFFF;
+
+            // rounding
+            if(round_bit) {
+                // if halfway (no ones after round bit), round towards even
+                if (round_bit == round_bits) {
+                    if (frac & 1)
+                        frac++;
+                } else {
+                    frac++;
+                }
+
+                // if rounding overflows low 23 bits, carry the rounding into exponent
+                if (frac & 0x800000) {
+                    E++;
+                    // clear out overflow
+                    frac &= 0x007FFFFF;
+                }
+            }
+        }
+
+    }
+
+    exp = E + 127;
+    
+    return (sign << 31) | (exp << 23) | frac;
+}
+
 
 int main() {
     /* 2.84 */
@@ -282,7 +374,7 @@ int main() {
 
     /* 2.96 */
     u = 0;
-    while (1) { // disable to avoid long processing
+    while (0) { // disable to avoid long processing
 
         if ((u & 0x7FFFFFFF) < 0x7F800001) {
             int using_func = float_f2i(u); 
@@ -304,7 +396,23 @@ int main() {
         u++;
     }
 
+    /* 2.97 */
+    u = 0;
+    while (0) { // disable to avoid very long processing
 
+        float_bits using_func = float_i2f((int) u); 
+        unsigned using_cast = f2u((float)(int) u);
+
+        if (using_func != using_cast) {
+            printf("u = %X  func: %f (%X)  cast: %f (%X)\n", u, u2f(using_func), using_func, u2f(using_cast), using_cast);
+        }
+
+        assert( float_i2f((int) u) == f2u((float)(int) u) );
+
+        if (u == 0xFFFFFFFF) break;
+
+        u++;
+    }
 
 
     printf("Success\n");
