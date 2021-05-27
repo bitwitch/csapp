@@ -1,0 +1,267 @@
+3.7 Procedures
+
+A procedure call involves passing both data (in the form of procedure parameters
+and return values) and control from one part of a program to another. In
+addition, it must allocate space for the local variables of the procedure on
+entry and deallocate them on exit. Most machines, including IA32, provide only
+simple instructions for transferring control to and from procedures. The passing
+of data and the allocation and deallocation of local variables is handled by
+manipulating the program stack.
+
+3.7.1 Stack Frame Structure
+
+IA32 programs make use of the program stack to support procedure calls. The
+machine uses the stack to pass procedure arguments, to store return information,
+to save registers for later restoration, and for local storage. The portion of
+the stack allocated for a single procedure call is called a stack frame. Figure
+3.21 diagrams the general structure of a stack frame. The topmost stack frame is
+delimited by two pointers, with register %ebp serving as the frame pointer, and
+register %esp serving as the stack pointer. 
+
+Figure 3.21
+     
+                                 Stack "Bottom"
+        ^              ____________________________________ <-----˥
+        |             |                                    |      |
+        |             |                                    |      |
+        |             |                .                   |      |
+    increasing        |                .                   |  earlier frames
+     address          |                .                   |      |
+        |             |                                    |      |
+        |             |                                    |      |
+                      |____________________________________|<-----˧
+                      |                .                   |      |
+                      |                .                   |      |
+                      |                .                   |      |
+                      |____________________________________|      |
+                      |                                    |      |
+                      |            Argument n              |      |
+                      |____________________________________|  caller's frame
+                      |                .                   |      |
+                      |                .                   |      |
+                      |                .                   |      |
+                      |____________________________________|      |
+                      |                                    |      |
+                      |            Argument 1              |      |
+                      |____________________________________|      |
+                      |                                    |      |
+                      |          Return Address            |      |
+                      |____________________________________|<-----˧
+                      |                                    |      |
+    frame pointer --->|            Saved %ebp              |      |
+                      |____________________________________|      |
+                      |                                    |      |
+                      |                                    |      |
+                      |      Saved registers, local        |  current frame
+                      |     variables, and temporaries     |      |
+                      |                                    |      |
+                      |____________________________________|      |
+                      |                                    |      |
+    stack pointer --->|       Argument Build Area          |      |
+                      |____________________________________|<-----˩
+                                  Stack "Top"
+
+
+
+The stack pointer can move while the procedure is executing, and hence most
+information is accessed relative to the frame pointer.  Suppose procedure P (the
+caller) calls procedure Q (the callee). The arguments to Q are contained within
+the stack frame for P. In addition, when P calls Q, the return address within P
+where the program should resume execution when it returns from Q is pushed onto
+the stack, forming the end of P’s stack frame. The stack frame for Q starts with
+the saved value of the frame pointer (a copy of register %ebp), followed by
+copies of any other saved register values.
+
+
+Procedure Q also uses the stack for any local variables that cannot be stored in
+registers. This can occur for the following reasons:
+. There are not enough registers to hold all of the local data.
+. Some of the local variables are arrays or structures and hence must be
+  accessed by array or structure references.
+. The address operator ‘&’ is applied to a local variable, and hence we must be
+  able to generate an address for it.
+
+In addition, Q uses the stack frame for storing arguments to any procedures it
+calls. As illustrated in Figure 3.21, within the called procedure, the first
+argument is positioned at offset 8 relative to %ebp, and the remaining arguments
+(assuming their data types require no more than 4 bytes) are stored in
+successive 4-byte blocks, so that argument i is at offset 4 + 4i relative to
+%ebp. Larger arguments (such as structures and larger numeric formats) require
+larger regions on the stack.
+
+As described earlier, the stack grows toward lower addresses and the stack
+pointer %esp points to the top element of the stack. Data can be stored on and
+retrieved from the stack using the pushl and popl instructions. Space for data
+with no specified initial value can be allocated on the stack by simply
+decrementing the stack pointer by an appropriate amount. Similarly, space can be
+deallocated by incrementing the stack pointer.
+
+3.7.2 Transferring Control
+
+The instructions supporting procedure calls and returns are shown in the
+following table:
+
+Instruction   |   Description
+--------------|----------------------------
+call Label    |   Procedure call
+call *Operand |   Procedure call
+leave         |   Prepare stack for return
+ret           |   Return from call
+
+The call instruction has a target indicating the address of the instruction
+where the called procedure starts. Like jumps, a call can either be direct or
+indirect.  In assembly code, the target of a direct call is given as a label,
+while the target of an indirect call is given by a * followed by an operand
+specifier using one of the formats described in Section 3.4.1.
+
+The effect of a call instruction is to push a return address on the stack and
+jump to the start of the called procedure. The return address is the address of
+the instruction immediately following the call in the program, so that execution
+will resume at this location when the called procedure returns. The ret
+instruction pops an address off the stack and jumps to this location. The proper
+use of this instruction is to have prepared the stack so that the stack pointer
+points to the place where the preceding call instruction stored its return
+address
+
+
+
+      eip|0x080483DC             eip|0x08048394              eip|0x080483E1
+  ----esp|0xFF9BC960         ----esp|0xFF9BC95C          ----esp|0xFF9BC960
+  |                          |                           |
+  |    _____________         |    _____________          |    _____________ 
+  |   |      .      |        |   |      .      |         |   |      .      |
+  |   |      .      |        |   |      .      |   ...   |   |      .      |
+  |   |      .      |        |   |      .      |         |   |      .      |
+  --->|_____________|        --->|_____________|         --->|_____________|
+                                 | 0x080483E1  | 
+                                 |_____________|
+
+   a) executing call          b) after call               c) after ret
+
+Figure 3.22 Illustration of call and ret functions. The call instruction
+transfers control to the start of a function, while the ret instruction returns
+back to the instruction following the call.
+
+
+Figure 3.22 illustrates the execution of the call and ret instructions for the
+sum and main functions introduced in Section 3.2.2. The following are excerpts of
+the disassembled code for the two functions:
+
+Beginning of function sum
+1  08048394 <sum>:
+2  8048394: 55                        push %ebp
+
+Return from function sum
+3  80483a4: c3                        ret
+
+Call to sum from main
+4  80483dc: e8 b3 ff ff ff            call 8048394 <sum>
+5  80483e1: 83 c4 14                  add $0x14,%esp
+
+
+In this code, we can see that the call instruction with address 0x080483dc in
+main calls function sum. This status is shown in Figure 3.22(a), with the
+indicated values for the stack pointer %esp and the program counter %eip. The
+effect of the call is to push the return address 0x080483e1 onto the stack and
+to jump to the first instruction in function sum, at address 0x08048394 (Figure
+3.22(b)).  The execution of function sum continues until it hits the ret
+instruction at address 0x080483a4. This instruction pops the value 0x080483e1
+from the stack and jumps to this address, resuming the execution of main just
+after the call instruction in sum (Figure 3.22(c)).
+
+The leave instruction can be used to prepare the stack for returning. It is
+equivalent to the following code sequence:
+
+1 movl %ebp, %esp   Set stack pointer to beginning of frame
+2 popl %ebp         Restore saved %ebp and set stack ptr to end of caller’s frame
+
+Alternatively, this preparation can be performed by an explicit sequence of move
+and pop operations. Register %eax is used for returning the value from any
+function that returns an integer or pointer.
+
+
+
+The following code fragment occurs often in the compiled version of library
+routines:
+
+
+---
+
+
+1 call next
+2 next:
+3 popl %eax
+
+A. To what value does register %eax get set?
+eax is set to 2, the address of 'next'
+
+B. Explain why there is no matching ret instruction to this call.
+
+C. What useful purpose does this code fragment serve?
+
+
+3.7.3 Register Usage Conventions
+
+The set of program registers acts as a single resource shared by all of the
+procedures. Although only one procedure can be active at a given time, we must
+make sure that when one procedure (the caller) calls another (the callee), the
+callee does not overwrite some register value that the caller planned to use
+later. For this reason, IA32 adopts a uniform set of conventions for register
+usage that must be respected by all procedures, including those in program
+libraries.
+
+By convention, registers %eax, %edx, and %ecx are classified as caller-save
+registers. When procedure Q is called by P, it can overwrite these registers
+without destroying any data required by P. On the other hand, registers %ebx,
+%esi, and %edi are classified as callee-save registers. This means that Q must
+save the values of any of these registers on the stack before overwriting them,
+and restore them before returning, because P (or some higher-level procedure)
+may need these values for its future computations. In addition, registers %ebp
+and %esp must be maintained according to the conventions described here.
+
+As an example, consider the following code:
+1  int P(int x)
+2  {    
+3      int y = x*x;
+4      int z = Q(y);
+5      return y + z;
+6  }
+
+Procedure P computes y before calling Q, but it must also ensure that the value
+of y is available after Q returns. It can do this by one of two means:
+
+- It can store the value of y in its own stack frame before calling Q; when Q
+  returns, procedure P can then retrieve the value of y from the stack. In other
+  words, P, the caller,saves the value.
+
+- It can store the value of y in a callee-save register. If Q, or any procedure
+  called by Q, wants to use this register, it must save the register value in
+  its stack frame and restore the value before it returns (in other words, the
+  callee saves the value). When Q returns to P, the value of y will be in the
+  callee-save register, either because the register was never altered or because
+  it was saved and restored.
+
+Either convention can be made to work, as long as there is agreement as to which
+function is responsible for saving which value. IA32 follows both approaches,
+partitioning the registers into one set that is caller-save, and another set that is
+callee-save.
+
+
+3.31
+The following code sequence occurs right near the beginning of the assembly code
+generated by gcc for a C procedure:
+1   subl $12, %esp
+2   movl %ebx, (%esp)
+3   movl %esi, 4(%esp)
+4   movl %edi, 8(%esp)
+5   movl 8(%ebp), %ebx
+6   movl 12(%ebp), %edi
+7   movl (%ebx), %esi
+8   movl (%edi), %eax
+9   movl 16(%ebp), %edx
+10  movl (%edx), %ecx
+We see that just three registers (%ebx, %esi, and %edi) are saved on the stack
+(lines 2–4). The program modifies these and three other registers (%eax, %ecx, and
+%edx). At the end of the procedure, the values of registers %edi, %esi, and %ebx
+are restored (not shown), while the other three are left in their modified states.
+Explain
