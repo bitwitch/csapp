@@ -363,8 +363,8 @@ argument in a register to the callee.
 */
 
 /* 3.68 */
-#define A 69
-#define B 69
+#define A 10
+#define B 8
 
 typedef struct {
     int x[A][B];
@@ -418,9 +418,47 @@ B = 8
 */
 
 /* 3.69 */
-typedef struct {
+#define CNT 7
 
+typedef struct {
+    long idx;
+    long x[4];
+} a_struct;
+/* 40 bytes */
+
+typedef struct {
+    int first;
+    a_struct a[CNT];
+    int last;
+} b_struct
+
+void test(long i, b_struct *bp) {
+    int n = bp->first + bp->last;
+    a_struct *ap = &bp->a[i];
+    ap->x[ap->idx] = n;
 }
+/*
+ecx = n
+
+rax = bp + 40i
+rdx = 8 + (bp + 40i) 
+rcx = n
+
+dest_addr = 16 + (bp + 40i) + 8 * (8 + (bp + 40i))
+
+
+int        <-- 288
+
+array[7]   <-- 8
+
+empty      
+
+int        <-- 0
+
+CNT = 7
+
+*/
+
 
 
 int main() {
