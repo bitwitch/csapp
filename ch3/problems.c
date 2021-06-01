@@ -132,10 +132,10 @@ long switch_prob(long x, long n) {
 #define S 5
 #define T 13
 
-long A[R][S][T];
+long Arr[R][S][T];
 long store_ele(long i, long j, long k, long *dest) {
-    *dest = A[i][j][k];
-    return sizeof(A);
+    *dest = Arr[i][j][k];
+    return sizeof(Arr);
 }
 
 /*
@@ -194,13 +194,13 @@ T = 13
 
 /* 3.65 */
 #define M 15
-void transpose(long A[M][M]) {
+void transpose(long Arr[M][M]) {
     long i, j;
     for (i = 0; i < M; i++)
         for (j = 0; j < i; j++) {
-            long t = A[i][j];
-            A[i][j] = A[j][i];
-            A[j][i] = t;
+            long t = Arr[i][j];
+            Arr[i][j] = Arr[j][i];
+            Arr[j][i] = t;
         }
 }
 /*
@@ -221,11 +221,11 @@ C. M = 15
 
 */
 
-void print_array(long A[M][M]) {
+void print_array(long Arr[M][M]) {
     int j,i;
     for (j=0; j<M; j++)
         for (i=0; i<M; i++) {
-            printf("%ld ", A[j][i]);
+            printf("%ld ", Arr[j][i]);
             if (i == M - 1)
                 printf("\n");
         }
@@ -236,11 +236,11 @@ void print_array(long A[M][M]) {
 #define NR(n) 3 * n
 #define NC(n) 4 * n + 1
 
-long sum_col(long n, long A[NR(n)][NC(n)], long j) {
+long sum_col(long n, long Arr[NR(n)][NC(n)], long j) {
     long i;
     long result = 0;
     for (i=0; i<NR(n); i++)
-        result += A[i][j];
+        result += Arr[i][j];
     return result;
 }
 
@@ -430,7 +430,7 @@ typedef struct {
     int first;
     a_struct a[CNT];
     int last;
-} b_struct
+} b_struct;
 
 void test(long i, b_struct *bp) {
     int n = bp->first + bp->last;
@@ -459,7 +459,47 @@ CNT = 7
 
 */
 
+/* 3.70 */
+union ele {
+    struct {
+        long *p;
+        long y;
+    } e1;
+    struct {
+        long x;
+        union ele *next;
+    } e2;
+};
 
+void proc(union ele *up) {
+    up->e2.x = *(up->e2.next->e1.p) - up->e2.next->e1.y;
+}
+
+/*
+A. offsets
+e1.p   0
+e1.y   8
+e2.x   0
+e2.y   8
+
+B. 16 bytes total
+*/
+
+/* 3.71 */
+#define BUF_SIZE 8
+
+void good_echo() {
+    char buf[BUF_SIZE];
+    char *result = fgets(buf, BUF_SIZE, stdin);
+    
+    if (!result)
+        return;
+
+    if (buf[BUF_SIZE -1] != '\n') 
+        return;
+
+    printf("%s\n", buf);
+}
 
 int main() {
     /* 3.58 */
@@ -477,7 +517,7 @@ int main() {
     printf("switch3 result = %ld\n", result);
 
     /* 3.65 */
-    long A[M][M] = {
+    long Arr[M][M] = {
         {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14},
         {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14},
         {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14},
@@ -495,11 +535,14 @@ int main() {
         {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}
     };
     printf("Before:\n");
-    print_array(A);
-    transpose(A);
+    print_array(Arr);
+    transpose(Arr);
     printf("After:\n");
-    print_array(A);
+    print_array(Arr);
     
+    /* 3.71 */
+    printf("\n\n");
+    good_echo();
 
 
     return 0;
