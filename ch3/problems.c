@@ -1,5 +1,7 @@
-#include <stdio.h>
+#include <assert.h>
 #include <inttypes.h>
+#include <limits.h>
+#include <stdio.h>
 
 /* 3.58 */
 long decode2(long x, long y, long z) {
@@ -501,6 +503,141 @@ void good_echo() {
     printf("%s\n", buf);
 }
 
+
+/* 3.72 */
+#include <alloca.h>
+long aframe(long n, long idx, long *q) {
+    long i;
+    long **p = alloca(n * sizeof(long*));
+    p[0] = &i;
+    for (i=1; i<n; i++)
+        p[i] = q;
+    return *p[idx];
+}
+
+/*
+A. 
+
+    |-------------------|
+    |    return addr    |
+    |-------------------|
+    |        rbp        |
+    |-------------------|<--- frame pointer
+    |                   |
+    |-------------------|
+    |                   |
+    |-------------------|<--- s1
+    |         e1        |
+    |-------------------|
+    |                   |
+    |                   |
+    |         p         |
+    |                   |
+    |                   |
+    |-------------------|
+    |         e2        |
+    |-------------------|<--- s2
+
+A. 
+rax = 30 + 8n
+
+n = 2
+rax = 46
+0000 0000 0000 0000 0000 0000 0010 1110
+1111 1111 1111 1111 1111 1111 1111 0000
+32
+16 + 8n
+
+n = 3
+rax = 54
+0000 0000 0000 0000 0000 0000 0011 0110
+1111 1111 1111 1111 1111 1111 1111 0000
+48
+24 + 8n
+
+n = 5
+rax = 70
+0000 0000 0000 0000 0000 0000 0100 0110
+1111 1111 1111 1111 1111 1111 1111 0000
+64
+24 + 8n
+
+
+space allocated is: 16 + 8n when n is even
+                    24 + 8n when n is odd
+
+
+
+B.
+by biasing rsp by 15 and then rounding down to the nearest multiple of 16, the
+compiler ensures that p has 8 byte alignment
+
+C.
+max value of e1:
+n=2, s1=0
+s2 = 0 + 16 + 16 = 32
+32 + 15 = 47
+47 round down to neareast multiple of 16 = 32
+p = 32
+e2 = 0
+e1 = 16
+
+min value of e1:
+n = 3, s1 = 321
+s2 = 321 + 48 = 369
+369 + 15 = 384
+384 round down to neareast multiple of 16 = 24
+p = 24
+e2 = 24
+e1 = 0
+
+D.
+p is guaranteed 16 byte alignment
+s2 is guaranteed to maintain the alignment of s1 from the nearest multiple of 16
+*/
+
+
+/* 3.73 */
+typedef enum {NEG, ZERO, POS, OTHER} range_t;
+
+/*
+range_t find_range(float x) {
+    int result;
+    if (x < 0)
+        result = NEG;
+    else if (x == 0)
+        result = ZERO;
+    else if (x > 0)
+        result = POS;
+    else
+        result = OTHER;
+    return result;
+}
+*/
+
+extern range_t find_range(float x) {
+    int result;
+    asm("movl $0, %%eax;"
+        "vxorps %%xmm1, %%xmm1, %%xmm1;"
+        "vucomiss %%xmm1, %%xmm0;"
+        "jp OTHER;"
+        "jg POS;"
+        "je ZERO;"
+        "jmp DONE;"
+        "OTHER: movl $3, %%eax;"
+        "jmp DONE;" 
+        "POS: movl $2, %%eax;"
+        "jmp DONE;"
+        "ZERO:movl $1, %%eax;"
+        "DONE:;"
+        : "=a" (result)
+        : "f"  (x)
+    );
+    return result;
+}
+
+
+
 int main() {
     /* 3.58 */
     long result = decode2(7, 8, 9);
@@ -544,6 +681,25 @@ int main() {
     printf("\n\n");
     good_echo();
 
+    /* 3.73 */
+    unsigned i = 0;
+    while (1) {
+
+        if (( (i & 0xFF800000) == 0x7F800000 || (i & 0xFF800000) == 0xFF800000) 
+                && (i & 0x7FFFFF) ) {
+            printf("i = %x, range = %d,  i & 0xFF800000 = %x, i & 0x7FFFFF = %x\n", i, find_range(i), i & 0xFF800000, i & 0x7FFFFF);
+            assert(find_range(i) == OTHER);
+        } else if (i & 0x80000000)
+            assert(find_range(i) == NEG);
+        else if (i == 0)
+            assert(find_range(i) == ZERO);
+        else
+            assert(find_range(i) == POS);
+
+        i++;
+        if (i == 0xFFFFFFFF) break;
+    }
+   
 
     return 0;
 }
