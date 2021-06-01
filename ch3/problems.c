@@ -598,7 +598,33 @@ s2 is guaranteed to maintain the alignment of s1 from the nearest multiple of 16
 
 
 /* 3.73 */
+float u_to_f(unsigned u) {
+    union {
+        unsigned u;
+        float f;
+    } bits;
+    bits.u = u;
+    return bits.f;
+}
+
 typedef enum {NEG, ZERO, POS, OTHER} range_t;
+
+extern range_t find_range(float x) {
+    asm("movl $0, %eax;"
+        "vxorps %xmm1, %xmm1, %xmm1;"
+        "vucomiss %xmm1, %xmm0;"
+        "jp OTHER;"
+        "ja POS;"
+        "je ZERO;"
+        "jmp DONE;"
+        "OTHER: movl $3, %eax;"
+        "jmp DONE;" 
+        "POS: movl $2, %eax;"
+        "jmp DONE;"
+        "ZERO:movl $1, %eax;"
+        "DONE: ret;"
+    );
+}
 
 /*
 range_t find_range(float x) {
@@ -615,43 +641,48 @@ range_t find_range(float x) {
 }
 */
 
-extern range_t find_range(float x) {
-    int result;
-    asm("movl $0, %%eax;"
-        "vxorps %%xmm1, %%xmm1, %%xmm1;"
-        "vucomiss %%xmm1, %%xmm0;"
-        "jp OTHER;"
-        "jg POS;"
-        "je ZERO;"
-        "jmp DONE;"
-        "OTHER: movl $3, %%eax;"
-        "jmp DONE;" 
-        "POS: movl $2, %%eax;"
-        "jmp DONE;"
-        "ZERO:movl $1, %%eax;"
-        "DONE:;"
-        : "=a" (result)
-        : "f"  (x)
+/* 3.74 */
+extern range_t find_range2(float x) {
+    asm("vxorps %xmm1, %xmm1, %xmm1;"
+        "vucomiss %xmm1, %xmm0;"
+        // NEG
+        "movl $0, %edx;"
+        "cmovb %edx, %eax;"
+        // ZERO
+        "movl $1, %edx;"
+        "cmove %edx, %eax;"
+        // POS
+        "movl $2, %edx;"
+        "cmova %edx, %eax;"
+        // OTHER
+        "movl $3, %edx;"
+        "cmovp %edx, %eax;"
+        "ret;"
     );
-    return result;
 }
 
+/* 3.75
+A. Complex arguments are passed in two xmm registers starting at xmm0.
+The low 8 bytes are stored in xmm0 the high 8 bytes in xmm1.
 
+B. Complex arguments are returned with the low 8 bytes in xmm0 and the high 
+8 bytes in xmm1;
+*/
 
 int main() {
     /* 3.58 */
     long result = decode2(7, 8, 9);
-    printf("decode2(7, 8, 9) --> %ld\n", result);
+    printf("decode2(7, 8, 9) --> %ld\n\n", result);
     
     /* 3.61 */
     long *xp = NULL;
     long val = cread_alt(xp);
-    printf("value read from cread: %ld\n", val);
+    printf("value read from cread: %ld\n\n", val);
     
     /* 3.62 */
     long p1 = 6, p2 = 9;
     result = switch3(&p1, &p2, MODE_D);
-    printf("switch3 result = %ld\n", result);
+    printf("switch3 result = %ld\n\n", result);
 
     /* 3.65 */
     long Arr[M][M] = {
@@ -674,33 +705,54 @@ int main() {
     printf("Before:\n");
     print_array(Arr);
     transpose(Arr);
-    printf("After:\n");
+    printf("After:\n\n");
     print_array(Arr);
     
     /* 3.71 */
-    printf("\n\n");
-    good_echo();
+    // printf("\n\n");
+    // good_echo();
 
     /* 3.73 */
     unsigned i = 0;
-    while (1) {
+    float f;
+    printf("Testing find_range...\n");
+    while (1) { 
+        f = u_to_f(i);
 
-        if (( (i & 0xFF800000) == 0x7F800000 || (i & 0xFF800000) == 0xFF800000) 
-                && (i & 0x7FFFFF) ) {
-            printf("i = %x, range = %d,  i & 0xFF800000 = %x, i & 0x7FFFFF = %x\n", i, find_range(i), i & 0xFF800000, i & 0x7FFFFF);
-            assert(find_range(i) == OTHER);
-        } else if (i & 0x80000000)
-            assert(find_range(i) == NEG);
-        else if (i == 0)
-            assert(find_range(i) == ZERO);
+        if ( (i & 0x7F800000) == 0x7F800000 && (i & 0x7FFFFF) ) 
+            assert(find_range(f) == OTHER);
+        else if (i == 0 || i == 0x80000000)
+            assert(find_range(f) == ZERO);
+        else if (i & 0x80000000)
+            assert(find_range(f) == NEG);
         else
-            assert(find_range(i) == POS);
+            assert(find_range(f) == POS);
+
+        i++;
+        if (i == 0xFFFFFFFF) break;
+    }
+ 
+    /* 3.74 */
+    i = 0;
+    printf("Testing find_range2...\n");
+    while (1) {
+        f = u_to_f(i);
+
+        if ( (i & 0x7F800000) == 0x7F800000 && (i & 0x7FFFFF) )
+            assert(find_range2(f) == OTHER);
+        else if (i == 0 || i == 0x80000000)
+            assert(find_range2(f) == ZERO);
+        else if (i & 0x80000000)
+            assert(find_range2(f) == NEG);
+        else
+            assert(find_range2(f) == POS);
 
         i++;
         if (i == 0xFFFFFFFF) break;
     }
    
 
+    printf("Success\n");
     return 0;
 }
 
