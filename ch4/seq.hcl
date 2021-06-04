@@ -59,6 +59,54 @@ word aluB = [
     icode in { IRRMOVQ, IIRMOVQ } : 0;
 ];
 
+word alufun = [
+    icode == IOPQ : ifun;
+    1 : ALUADD;
+];
+
+bool set_cc = icoode == IOPQ;
+
+# 4.24
+word dstE = [
+    icode in { IRRMOVQ } && Cnd : rB;
+    icode in { IIRMOVQ, IOPQ } : rB;
+    icode in { IPUSHQ, IPOPQ, ICALL, IRET } : RRSP;
+    1 : RNONE;
+];
+
+word mem_addr = [
+    icode in { IRMMOVQ, IPUSHQ, ICALL, IMRMOVQ } : valE;
+    icode in { IPOPQ, IRET } : valA;
+];
+
+# 4.25
+word mem_data = [
+    icode in { IRMMOVQ, IPUSHQ } : valA;
+    icode == ICALL : valP;
+];
+
+bool mem_read = icode in { IMRMOVQ, IPOPQ, IRET };
+
+# 4.26
+bool mem_write = icode in {  IRMMOVQ, IPUSHQ, ICALL };
+
+# 4.27
+word stat = [
+    icode == IHALT : 4;              # SHLT
+    !instr_valid : 3;                # SINS
+    imem_error || dmem_error : 2;    # SADR
+    1 : 1;                           # SAOK
+];
+
+
+word new_pc = [
+    icode == ICALL : valC;
+    icode == IJXX && Cnd : valC;
+    icode == IRET : valM;
+    1 : valP;
+];
+
+
 
 
 
