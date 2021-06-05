@@ -64,7 +64,7 @@ word alufun = [
     1 : ALUADD;
 ];
 
-bool set_cc = icoode == IOPQ;
+bool set_cc = icode == IOPQ;
 
 # 4.24
 word dstE = [
@@ -92,10 +92,10 @@ bool mem_write = icode in {  IRMMOVQ, IPUSHQ, ICALL };
 
 # 4.27
 word stat = [
-    icode == IHALT : 4;              # SHLT
-    !instr_valid : 3;                # SINS
-    imem_error || dmem_error : 2;    # SADR
-    1 : 1;                           # SAOK
+    icode == IHALT           : SHLT;              
+    !instr_valid             : SINS;               
+    imem_error || dmem_error : SADR;  
+    1                        : SAOK;                        
 ];
 
 
