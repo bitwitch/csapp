@@ -15,8 +15,8 @@ running this on Raspberry Pi OS, should be similar for other linux distros:
   
 1. Install flex  
     `sudo apt install flex`
-2. Download and build Tcl
-3. Download and build Tk
+2. Download and build Tcl  
+3. Download and build Tk  
     Both can be downloaded from [here](https://www.tcl.tk/software/tcltk/download.html)
 4. Update the outermost Makefile in the sim directory
     - enable GUI mode by uncommenting the line:  
