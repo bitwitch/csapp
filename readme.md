@@ -23,10 +23,10 @@ running this on Raspberry Pi OS, should be similar for other linux distros:
     `GUIMODE=-DHAS_GUI`   
     - Point the linker to the tcl and tk libraries, for me this was:   
     `TKLIBS=-L/usr/local/lib -ltcl8.6 -ltk8.6`
-    - Point the compiler to the tcl and tk header files (tcl.h and tk.h).
-      Also since tcl apparently deprecated some things in 8.5, in order to  
-      build projects using some deprecated code, you have to  
-      `#define USE_INTERP_RESULT` before including tcl.h. This can be done
-      via a compiler flag.  
-    `TKINC=-D USE_INTERP_RESULT -isystem /usr/include/tcl8.6`  
+    - Point the compiler to the tcl and tk header files (tcl.h and tk.h).  
+      Also since tcl apparently deprecated some things in 8.5, in order to    
+      build projects using some deprecated code, you have to    
+      `#define USE_INTERP_RESULT` before including tcl.h. This can be done  
+      via a compiler flag.   
+    `TKINC=-D USE_INTERP_RESULT -isystem /usr/include/tcl8.6`    
 
