@@ -1,0 +1,108 @@
+                            | # Execution begins at address 0 
+0x000:                      |     .pos 0
+0x000: 30f40002000000000000 |     irmovq stack, %rsp
+0x00a: 809800000000000000   |     call main
+0x013: 00                   |     halt
+                            | 
+                            | # create storage for 8 longs 
+0x018:                      |     .align 8
+0x018: 6969690000000000     | array:  .quad 0x696969
+0x020: 6969690000000000     |     .quad 0x696969
+0x028: 6969690000000000     |     .quad 0x696969
+0x030: 6969690000000000     |     .quad 0x696969
+0x038: 6969690000000000     |     .quad 0x696969
+0x040: 6969690000000000     |     .quad 0x696969
+0x048: 6969690000000000     |     .quad 0x696969
+0x050: 6969690000000000     |     .quad 0x696969
+                            | 
+0x058:                      |     .align 8
+0x058: aa0a000000000000     | test_array: .quad 0xAAA
+0x060: dd0d000000000000     |     .quad 0xDDD
+0x068: bb0b000000000000     |     .quad 0xBBB
+0x070: cc0c000000000000     |     .quad 0xCCC
+0x078: dd0d000000000000     |     .quad 0xDDD
+0x080: bb0b000000000000     |     .quad 0xBBB
+0x088: dd0d000000000000     |     .quad 0xDDD
+0x090: dd0d000000000000     |     .quad 0xDDD
+                            | 
+                            | 
+0x098:                      | main:   
+0x098: 63cc                 |     xorq %r12, %r12
+0x09a: 30fd0100000000000000 |     irmovq $1, %r13
+0x0a4: 30fe0800000000000000 |     irmovq $8, %r14
+0x0ae: 30f31800000000000000 |     irmovq array, %rbx    
+0x0b8:                      | loop:
+0x0b8: 20c7                 |     rrmovq %r12, %rdi
+0x0ba: 30f50100000000000000 |     irmovq $1, %rbp
+0x0c4: 6157                 |     subq %rbp, %rdi 
+0x0c6: a0cf                 |     pushq %r12
+0x0c8: 80ef00000000000000   |     call switchv
+0x0d1: b0cf                 |     popq %r12
+0x0d3: 40030000000000000000 |     rmmovq %rax, (%rbx)
+0x0dd: 60e3                 |     addq %r14, %rbx
+0x0df: 60dc                 |     addq %r13, %r12         # i++
+0x0e1: 20e5                 |     rrmovq %r14, %rbp
+0x0e3: 61c5                 |     subq %r12, %rbp
+0x0e5: 76b800000000000000   |     jg loop
+0x0ee: 90                   |     ret
+                            | 
+                            | 
+                            | # long switchv(long idx)
+                            | # idx in rdi
+0x0ef: 6300                 | switchv:    xorq %rax, %rax
+                            | 
+                            |     # if out of case range, jmp to default
+0x0f1: 6277                 |     andq %rdi, %rdi
+0x0f3: 725e01000000000000   |     jl default
+0x0fc: 30f80500000000000000 |     irmovq $5, %r8
+0x106: 6178                 |     subq %rdi, %r8
+0x108: 725e01000000000000   |     jl default
+                            | 
+                            |     # calculate jump table address
+0x111: 30f87001000000000000 |     irmovq jumptable, %r8
+0x11b: 30f60800000000000000 |     irmovq $8, %rsi
+0x125: 80a001000000000000   |     call mult
+0x12e: 6080                 |     addq %r8, %rax
+0x130: 50000000000000000000 |     mrmovq (%rax), %rax
+                            | 
+                            |     # hack for an indirect jump
+0x13a: a00f                 |     pushq %rax
+0x13c: 90                   |     ret
+                            | 
+0x13d:                      | case_0:
+0x13d: 30f0aa0a000000000000 |     irmovq $0xAAA, %rax
+0x147: 90                   |     ret
+0x148:                      | case_2_5:
+0x148: 30f0bb0b000000000000 |     irmovq $0xBBB, %rax
+0x152: 90                   |     ret
+0x153:                      | case_3:
+0x153: 30f0cc0c000000000000 |     irmovq $0xCCC, %rax
+0x15d: 90                   |     ret
+0x15e:                      | default:
+0x15e: 30f0dd0d000000000000 |     irmovq $0xDDD, %rax
+0x168: 90                   |     ret
+                            | 
+0x170:                      |     .align 8
+0x170: 3d01000000000000     | jumptable:  .quad case_0
+0x178: 5e01000000000000     |     .quad default
+0x180: 4801000000000000     |     .quad case_2_5
+0x188: 5301000000000000     |     .quad case_3
+0x190: 5e01000000000000     |     .quad default
+0x198: 4801000000000000     |     .quad case_2_5
+                            | 
+                            | # long mult(long x, long y)
+                            | # x in rdi, y in rsi
+0x1a0: 6300                 | mult:   xorq %rax, %rax
+0x1a2: 30fc0100000000000000 |     irmovq $1, %r12
+0x1ac: 6266                 |     andq %rsi, %rsi
+0x1ae: 73c401000000000000   | test:   je done
+0x1b7: 6070                 |     addq %rdi, %rax
+0x1b9: 61c6                 |     subq %r12, %rsi
+0x1bb: 70ae01000000000000   |     jmp test
+0x1c4:                      | done:
+0x1c4: 90                   |     ret
+                            | 
+                            | 
+                            | # Stack starts here and grows to lower addresses
+0x200:                      | 	.pos 0x200
+0x200:                      | stack:

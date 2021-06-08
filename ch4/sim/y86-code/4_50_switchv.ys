@@ -1,0 +1,108 @@
+# Execution begins at address 0 
+    .pos 0
+    irmovq stack, %rsp
+    call main
+    halt
+
+# create storage for 8 longs 
+    .align 8
+array:  .quad 0x696969
+    .quad 0x696969
+    .quad 0x696969
+    .quad 0x696969
+    .quad 0x696969
+    .quad 0x696969
+    .quad 0x696969
+    .quad 0x696969
+
+    .align 8
+test_array: .quad 0xDDD
+    .quad 0xAAA
+    .quad 0xDDD
+    .quad 0xBBB
+    .quad 0xCCC
+    .quad 0xDDD
+    .quad 0xBBB
+    .quad 0xDDD
+
+
+main:   
+    xorq %r12, %r12
+    irmovq $1, %r13
+    irmovq $8, %r14
+    irmovq array, %rbx    
+loop:
+    rrmovq %r12, %rdi
+    irmovq $1, %rbp
+    subq %rbp, %rdi 
+    pushq %r12
+    call switchv
+    popq %r12
+    rmmovq %rax, (%rbx)
+    addq %r14, %rbx
+    addq %r13, %r12         # i++
+    rrmovq %r14, %rbp
+    subq %r12, %rbp
+    jg loop
+    ret
+
+
+# long switchv(long idx)
+# idx in rdi
+switchv:    xorq %rax, %rax
+
+    # if out of case range, jmp to default
+    andq %rdi, %rdi
+    jl default
+    irmovq $5, %r8
+    subq %rdi, %r8
+    jl default
+
+    # calculate jump table address
+    irmovq jumptable, %r8
+    irmovq $8, %rsi
+    call mult
+    addq %r8, %rax
+    mrmovq (%rax), %rax
+
+    # hack for an indirect jump
+    pushq %rax
+    ret
+
+case_0:
+    irmovq $0xAAA, %rax
+    ret
+case_2_5:
+    irmovq $0xBBB, %rax
+    ret
+case_3:
+    irmovq $0xCCC, %rax
+    ret
+default:
+    irmovq $0xDDD, %rax
+    ret
+
+    .align 8
+jumptable:  .quad case_0
+    .quad default
+    .quad case_2_5
+    .quad case_3
+    .quad default
+    .quad case_2_5
+
+# long mult(long x, long y)
+# x in rdi, y in rsi
+mult:   xorq %rax, %rax
+    irmovq $1, %r12
+    andq %rsi, %rsi
+test:   je done
+    addq %rdi, %rax
+    subq %r12, %rsi
+    jmp test
+done:
+    ret
+
+
+# Stack starts here and grows to lower addresses
+	.pos 0x200
+stack:
