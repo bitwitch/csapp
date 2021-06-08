@@ -7,7 +7,6 @@ GUIMODE=-DHAS_GUI
 # to tell gcc which directory to look in. Comment this out if you
 # don't have Tcl/Tk.
 
-# TKLIBS=-L/usr/lib -ltcl -ltk
 TKLIBS=-L/usr/local/lib -ltcl8.6 -ltk8.6
 
 # Modify the following line so that gcc can find the tcl.h and tk.h
@@ -15,6 +14,7 @@ TKLIBS=-L/usr/local/lib -ltcl8.6 -ltk8.6
 # Tcl/Tk.
 
 TKINC=-D USE_INTERP_RESULT -isystem /usr/include/tcl8.6
+#TKINC=-isystem /usr/local/include
 
 ##################################################
 # You shouldn't need to modify anything below here

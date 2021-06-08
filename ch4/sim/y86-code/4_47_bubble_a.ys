@@ -1,28 +1,44 @@
 # Execution begins at address 0 
-	.pos 0
-	irmovq stack, %rsp
-	call main
-	halt
+    .pos 0
+    irmovq stack, %rsp
+    call main
+    halt
 
 # Array of 9 elements
-	.align 8
-array:  .quad 0x0800000000000000
-    .quad 0x0300000000000000
-    .quad 0x0900000000000000
-    .quad 0x0700000000000000
-    .quad 0x0400000000000000
-    .quad 0x0200000000000000
-    .quad 0x0100000000000000
-    .quad 0x0600000000000000
-    .quad 0x0500000000000000
+    .align 8
+array:  .quad 0x8
+    .quad 0x3
+    .quad 0x9
+    .quad 0x7
+    .quad 0x4
+    .quad 0x2
+    .quad 0x1
+    .quad 0x6
+    .quad 0x5
+
+# Array to test sorting
+    .align 8
+test_array: .quad 0x1
+    .quad 0x2
+    .quad 0x3
+    .quad 0x4
+    .quad 0x5
+    .quad 0x6
+    .quad 0x7
+    .quad 0x8
+    .quad 0x9
+
 
 main:   irmovq array,%rdi
     irmovq $9,%rsi
     call bubble_a    # bubble_a(array, 9)
+    call test_bubble_a
     ret
+
 
 # void bubble_a(long *data, long count)
 # data in %rdi, count in %rsi
+# last in %rsi, i in %rdx
 bubble_a:   irmovq $1, %rax
     irmovq $8, %rcx
     subq %rax, %rsi        # last = count - 1
@@ -30,15 +46,16 @@ bubble_a:   irmovq $1, %rax
 loop_outer: rrmovq %rdi, %r8       # &data[i]
     xorq %rdx, %rdx        # i = 0
     jmp test_inner
-loop_inner: rrmovq %r8, %r9 
+loop_inner: rrmovq %r8, %r9   
     addq %rcx, %r9         
     mrmovq (%r8), %r10    # data[i]
     mrmovq (%r9), %r11    # data[i+1]
     subq %r11, %r10       # if (data[i+1] < data[i])
-    jle test_inner
+    jle post_inner
     mrmovq (%r8), %r10    # data[i]
     rmmovq %r10, (%r9)    # data[i+1] = data[i]
     rmmovq %r11, (%r8)    # data[i] = data[i+1]
+post_inner:
     addq %rax, %rdx       # i++
     addq %rcx, %r8        # get addr of next element
 test_inner: rrmovq %rsi, %r9      
@@ -47,6 +64,31 @@ test_inner: rrmovq %rsi, %r9
     subq %rax, %rsi       # last--
 test_outer: jg loop_outer
     ret
+
+
+# int test_bubble_a()
+# returns 0 on success, 1 on failure
+test_bubble_a:  xorq %rax, %rax
+    irmovq $1, %r8
+    irmovq $8, %r9
+    rrmovq %r9, %rdi           # rdi = 8
+    irmovq array, %rcx
+    irmovq test_array, %rdx
+loop:   mrmovq (%rcx), %r10
+   mrmovq (%rdx), %r11
+   subq %r10, %r11
+   jne fail
+   addq %rdi, %rcx
+   addq %rdi, %rdx
+   subq %r8, %r9
+   je done
+   jmp loop
+fail:   irmovq $1, %rax
+done:   ret
+
+
+
+
 
 # Stack starts here and grows to lower addresses
 	.pos 0x200

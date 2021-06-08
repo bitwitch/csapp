@@ -414,7 +414,7 @@ word_t get_reg_val(mem_t r, reg_id_t id)
 void set_reg_val(mem_t r, reg_id_t id, word_t val)
 {
     if (id < REG_NONE) {
-	set_word_val(r,id*8,val);
+        set_word_val(r,id*8,val);
 #ifdef HAS_GUI
 	if (gui_mode) {
 	    signal_register_update(id, val);
