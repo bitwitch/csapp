@@ -30,3 +30,30 @@ running this on Raspberry Pi OS, should be similar for other linux distros:
       via a compiler flag.   
     `TKINC=-D USE_INTERP_RESULT -isystem /usr/include/tcl8.6`    
 
+#### Note on buggy behavior with simulator memory 
+I noticed that if you allocate some memory directly in Y86-64 and try to assign  
+an 8 byte hex value (specifying all 8 bytes explicitly), then the simulator  
+doesn't work properly. The memory contents viewer and the register display both  
+do not show correct values.  
+
+For example creating an array like this:   
+```
+    .align 8
+array:
+    .quad 0x0123456789ABCDEF
+    .quad 0x0123456789ABCDEF
+    .quad 0x0123456789ABCDEF
+    .quad 0x0123456789ABCDEF
+```  
+
+I have only had success with small values like this:  
+```
+    .align 8
+array:
+    .quad 0xA
+    .quad 0xB
+    .quad 0xC
+    .quad 0xD
+```  
+
+
