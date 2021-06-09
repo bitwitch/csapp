@@ -1,6 +1,6 @@
 # Modify this line to indicate the default version to build
 
-VERSION=std
+VERSION=nobypass
 
 # Comment this out if you don't have Tcl/Tk on your system
 
@@ -11,13 +11,14 @@ GUIMODE=-DHAS_GUI
 # to tell gcc which directory to look in. Comment this out if you
 # don't have Tcl/Tk.
 
-TKLIBS=-L/usr/lib -ltk -ltcl
+TKLIBS=-L/usr/lib -ltk8.6 -ltcl8.6
 
 # Modify the following line so that gcc can find the tcl.h and tk.h
 # header files on your system. Comment this out if you don't have
 # Tcl/Tk.
 
-TKINC=-isystem /usr/include/tcl8.5
+TKINC=-D USE_INTERP_RESULT -isystem /usr/include/tcl8.6
+#TKINC=-isystem /usr/include/tcl8.5
 
 # Modify these two lines to choose your compiler and compile time
 # flags.
@@ -35,13 +36,13 @@ INC=$(TKINC) -I$(MISCDIR) $(GUIMODE)
 LIBS=$(TKLIBS) -lm
 YAS = ../misc/yas
 
-all: psim drivers
+all: psim_nobypass drivers
 
 # This rule builds the PIPE simulator
-psim: psim.c sim.h pipe-$(VERSION).hcl $(MISCDIR)/isa.c $(MISCDIR)/isa.h
+psim_nobypass: psim.c sim.h pipe-$(VERSION).hcl $(MISCDIR)/isa.c $(MISCDIR)/isa.h
 	# Building the pipe-$(VERSION).hcl version of PIPE
 	$(HCL2C) -n pipe-$(VERSION).hcl < pipe-$(VERSION).hcl > pipe-$(VERSION).c
-	$(CC) $(CFLAGS) $(INC) -o psim psim.c pipe-$(VERSION).c \
+	$(CC) $(CFLAGS) $(INC) -o psim_nobypass psim.c pipe-$(VERSION).c \
 		$(MISCDIR)/isa.c $(LIBS)
 
 # This rule builds driver programs for Part C of the Architecture Lab
@@ -58,6 +59,6 @@ drivers:
 
 
 clean:
-	rm -f psim pipe-*.c *.o *.exe *~ 
+	rm -f psim_nobypass pipe-*.c *.o *.exe *~ 
 
 

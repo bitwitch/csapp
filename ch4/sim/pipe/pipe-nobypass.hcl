@@ -309,7 +309,7 @@ word Stat = [
 bool F_bubble = 0;
 bool F_stall =
 	# Modify the following to stall the update of pipeline register F
-	0 ||
+	D_stall ||
 	# Stalling at fetch while ret passes through pipeline
 	IRET in { D_icode, E_icode, M_icode };
 
@@ -317,7 +317,24 @@ bool F_stall =
 # At most one of these can be true.
 bool D_stall = 
 	# Modify the following to stall the instruction in decode
-	0;
+
+    # incoming instruction reads from register
+    f_icode in { IRRMOVQ, IRMMOVQ, IMRMOVQ, IOPQ, IPUSHQ, IPOPQ, ICALL, IRET } &&
+
+    # write back pipline reg is writing to a reg 
+    W_icode in { IOPQ, IRRMOVQ, IIRMOVQ, IMRMOVQ, IPUSHQ, IPOPQ, ICALL, IRET } &&
+
+    # write back pipline reg is writing to a reg 
+    M_icode in { IOPQ, IRRMOVQ, IIRMOVQ, IMRMOVQ, IPUSHQ, IPOPQ, ICALL, IRET } &&
+
+    # write back is writing to same reg that decode is reading from
+    (
+    f_srcA in { W_dstE, W_dstM  } ||
+    f_srcB in { W_dstE, W_dstM  } 
+    )
+
+
+	;
 
 bool D_bubble =
 	# Mispredicted branch
