@@ -76,6 +76,28 @@ Y86-64 Program written elsewhere, check sim/y86-code
 */
 
 
+/* 4.51 
+
+Stage          iaddq V, rB
+---------------------------------
+Fetch          icode:ifun <-- M[PC]  == C:0
+               rA:rB <-- M[PC+1] == F:rB
+               valC <-- M[PC+2]
+               valP <-- PC+10
+
+Decode         valB <-- R[rB]
+
+Execute        valE <-- valC + valB
+               set CC
+
+Memory 
+
+Write back     r[rB] <-- valE
+
+PC update      PC <-- valP
+
+*/
+
 
 
 
