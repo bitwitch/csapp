@@ -33,17 +33,25 @@ main:
     irmovq array, %rbx    
 loop:
     rrmovq %r12, %rdi
-    irmovq $1, %rbp
-    subq %rbp, %rdi 
-    pushq %r12
+    irmovq $1, %r8
+    subq %r8, %rdi          # MINVAL is -1, so the argument passed to switchv is (1 + MINVAL)
     call switchv
-    popq %r12
-    rmmovq %rax, (%rbx)
+    rrmovq %rax, %rdi
+    rrmovq %rax, %rbp
+    rrmovq %r12, %rsi
+    call test_switchv
+    andq %rax, %rax
+    jne fail
+    rmmovq %rbp, (%rbx)
     addq %r14, %rbx
     addq %r13, %r12         # i++
-    rrmovq %r14, %rbp
-    subq %r12, %rbp
+    rrmovq %r14, %r8
+    subq %r12, %r8
     jg loop
+    jmp success
+fail:
+    halt
+success:
     ret
 
 
@@ -59,9 +67,9 @@ switchv:    xorq %rax, %rax
     jl default
 
     # calculate jump table address
-    irmovq jumptable, %r8
     irmovq $8, %rsi
     call mult
+    irmovq jumptable, %r8
     addq %r8, %rax
     mrmovq (%rax), %rax
 
@@ -93,16 +101,39 @@ jumptable:  .quad case_0
 # long mult(long x, long y)
 # x in rdi, y in rsi
 mult:   xorq %rax, %rax
-    irmovq $1, %r12
+    irmovq $1, %r8
     andq %rsi, %rsi
 test:   je done
     addq %rdi, %rax
-    subq %r12, %rsi
+    subq %r8, %rsi
     jmp test
 done:
     ret
 
 
+# long test_switchv(long val, long idx)
+# val in rdi, idx in rsi
+# returns 0 on success, else 1
+test_switchv:   pushq %rdi
+
+    # calculate address of test_array[i]
+    rrmovq %rsi, %rdi
+    irmovq $8, %rsi
+    call mult
+    irmovq test_array, %r8
+    addq %r8, %rax
+    mrmovq (%rax), %rax
+
+    xorq %r8, %r8
+    irmovq $1, %r9
+    popq %rdi
+    subq %rdi, %rax
+    cmovne %r9, %r8 
+    rrmovq %r8, %rax
+    ret
+    
+
+
 # Stack starts here and grows to lower addresses
-	.pos 0x200
+	.pos 0x300
 stack:
