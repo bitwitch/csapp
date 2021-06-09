@@ -1,0 +1,98 @@
+                            | # Execution begins at address 0 
+0x000:                      |     .pos 0
+0x000: 30f40002000000000000 |     irmovq stack, %rsp
+0x00a: 80a800000000000000   |     call main
+0x013: 00                   |     halt
+                            | 
+                            | # Array of 9 elements
+0x018:                      |     .align 8
+0x018: 0800000000000000     | array:  .quad 0x8
+0x020: 0300000000000000     |     .quad 0x3
+0x028: 0900000000000000     |     .quad 0x9
+0x030: 0700000000000000     |     .quad 0x7
+0x038: 0400000000000000     |     .quad 0x4
+0x040: 0200000000000000     |     .quad 0x2
+0x048: 0100000000000000     |     .quad 0x1
+0x050: 0600000000000000     |     .quad 0x6
+0x058: 0500000000000000     |     .quad 0x5
+                            | 
+                            | # Array to test sorting
+0x060:                      |     .align 8
+0x060: 0100000000000000     | test_array: .quad 0x1
+0x068: 0200000000000000     |     .quad 0x2
+0x070: 0300000000000000     |     .quad 0x3
+0x078: 0400000000000000     |     .quad 0x4
+0x080: 0500000000000000     |     .quad 0x5
+0x088: 0600000000000000     |     .quad 0x6
+0x090: 0700000000000000     |     .quad 0x7
+0x098: 0800000000000000     |     .quad 0x8
+0x0a0: 0900000000000000     |     .quad 0x9
+                            | 
+                            | 
+0x0a8: 30f71800000000000000 | main:   irmovq array,%rdi
+0x0b2: 30f60900000000000000 |     irmovq $9,%rsi
+0x0bc: 80cf00000000000000   |     call bubble_a    # bubble_a(array, 9)
+0x0c5: 805001000000000000   |     call test_bubble_a
+0x0ce: 90                   |     ret
+                            | 
+                            | 
+                            | # void bubble_a(long *data, long count)
+                            | # data in %rdi, count in %rsi
+                            | # last in %rsi, i in %rdx
+0x0cf: 30f00100000000000000 | bubble_a:   irmovq $1, %rax
+0x0d9: a0cf                 |     pushq %r12
+0x0db: 30f10800000000000000 |     irmovq $8, %rcx
+0x0e5: 6106                 |     subq %rax, %rsi        # last = count - 1
+0x0e7: 704401000000000000   |     jmp test_outer
+0x0f0: 2078                 | loop_outer: rrmovq %rdi, %r8       # &data[i]
+0x0f2: 6322                 |     xorq %rdx, %rdx        # i = 0
+0x0f4: 703501000000000000   |     jmp test_inner
+0x0fd: 2089                 | loop_inner: rrmovq %r8, %r9   
+0x0ff: 6019                 |     addq %rcx, %r9         
+0x101: 50a80000000000000000 |     mrmovq (%r8), %r10    # data[i]
+0x10b: 20ac                 |     rrmovq %r10, %r12     # data[i]
+0x10d: 50b90000000000000000 |     mrmovq (%r9), %r11    # data[i+1]
+                            | 
+0x117: 61bc                 |     subq %r11, %r12       # if (data[i+1] < data[i])
+0x119: 40b80000000000000000 |     rmmovq %r11, (%r8)
+0x123: 208c                 |     rrmovq %r8, %r12
+0x125: 269c                 |     cmovg %r9, %r12
+0x127: 40ac0000000000000000 |     rmmovq %r10, (%r12)
+                            | 
+0x131:                      | post_inner:
+0x131: 6002                 |     addq %rax, %rdx       # i++
+0x133: 6018                 |     addq %rcx, %r8        # get addr of next element
+0x135: 2069                 | test_inner: rrmovq %rsi, %r9      
+0x137: 6129                 |     subq %rdx, %r9               
+0x139: 76fd00000000000000   |     jg loop_inner         
+0x142: 6106                 |     subq %rax, %rsi       # last--
+0x144: 76f000000000000000   | test_outer: jg loop_outer
+0x14d: b0cf                 |     popq %r12
+0x14f: 90                   |     ret
+                            | 
+                            | 
+                            | # int test_bubble_a()
+                            | # returns 0 on success, 1 on failure
+0x150: 6300                 | test_bubble_a:  xorq %rax, %rax
+0x152: 30f80100000000000000 |     irmovq $1, %r8
+0x15c: 30f90800000000000000 |     irmovq $8, %r9
+0x166: 2097                 |     rrmovq %r9, %rdi           # rdi = 8
+0x168: 30f11800000000000000 |     irmovq array, %rcx
+0x172: 30f26000000000000000 |     irmovq test_array, %rdx
+0x17c: 50a10000000000000000 | loop:   mrmovq (%rcx), %r10
+0x186: 50b20000000000000000 |    mrmovq (%rdx), %r11
+0x190: 61ab                 |    subq %r10, %r11
+0x192: 74b301000000000000   |    jne fail
+0x19b: 6071                 |    addq %rdi, %rcx
+0x19d: 6072                 |    addq %rdi, %rdx
+0x19f: 6189                 |    subq %r8, %r9
+0x1a1: 73bd01000000000000   |    je done
+0x1aa: 707c01000000000000   |    jmp loop
+0x1b3: 30f00100000000000000 | fail:   irmovq $1, %rax
+0x1bd: 90                   | done:   ret
+                            | 
+                            | 
+                            | 
+                            | # Stack starts here and grows to lower addresses
+0x200:                      | 	.pos 0x200
+0x200:                      | stack:
