@@ -1,0 +1,5 @@
+#!/bin/bash
+PREFIX="/home/pi/opt/cross"
+$PREFIX/bin/x86_64-elf-gcc -D__ARM_PCS_VFP -I"$PREFIX/include" -L"$PREFIX/lib" -Og -S practice.c
+
+
