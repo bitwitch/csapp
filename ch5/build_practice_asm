@@ -1,5 +1,5 @@
 #!/bin/bash
 PREFIX="/home/pi/opt/cross"
-$PREFIX/bin/x86_64-elf-gcc -D__ARM_PCS_VFP -I"$PREFIX/include" -L"$PREFIX/lib" -Og -S practice.c
+$PREFIX/bin/x86_64-elf-gcc -D__ARM_PCS_VFP -I"/usr/include" -I"/usr/include/arm-linux-gnueabihf" -L"/usr/lib" -O1 -S vec.c practice.c
 
 

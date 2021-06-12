@@ -1,0 +1,190 @@
+Practice Problem 5.8
+
+A1: r = ((r * x) * y)  z;
+------------------------------------------------------------------------------
+.L20:
+	mulsd	(%rdi,%rax,8), %xmm0
+	mulsd	8(%rdi,%rax,8), %xmm0
+	mulsd	16(%rdi,%rax,8), %xmm0
+	addq	$3, %rax
+	cmpq	%rdx, %rax
+	jl	.L20
+
+
+    xmm0               rax
+     |                  |
+     |  _____load_______|
+     | |                |
+    mulsd               |
+     |                  |
+     |  _____load_______|
+     | |                |
+    mulsd               |
+     |                  |
+     |  _____load_______|
+     | |                |
+    mulsd               |
+     |                  |
+     |                 addq
+     |                  |
+     v                  v
+
+
+3 mulsd instructions per iteration with latency 5 each
+3 elements computed per iteration
+CPE = 3 * 5 / 3 = 5
+
+
+A2: r = (r * (x * y)) * z;
+------------------------------------------------------------------------------
+.L20:
+	movsd	(%rdi,%rax,8), %xmm1
+	mulsd	8(%rdi,%rax,8), %xmm1
+	mulsd	16(%rdi,%rax,8), %xmm1
+	mulsd	%xmm1, %xmm0
+	addq	$3, %rax
+	cmpq	%rdx, %rax
+	jl	.L20
+
+
+    xmm0                   rax
+     |                      |
+     |    _______load_______|
+     |   |  _____load_______|
+     |   | |                |
+     |  mulsd               |
+     |   |                  |
+     |   |  _____load_______|
+     |   | |                |
+     |  mulsd               |
+     |   |                  |
+     |   |                  |
+     mulsd                  |
+        |                   |
+        |                   |
+        |  _____load________|
+        | |                 |
+       mulsd                |
+        |                   |
+        |                  addq
+        |                   |
+        v                   v
+
+
+2 mulsd instructions per iteration (with data dependencies) with 5 latency each
+3 elements computed per iteration
+CPE = 2 * 5 / 3 = 3.33
+
+
+A3: r = r * ((x * y) * z);
+------------------------------------------------------------------------------
+.L20:
+	movsd	(%rdi,%rax,8), %xmm1
+	mulsd	8(%rdi,%rax,8), %xmm1
+	mulsd	16(%rdi,%rax,8), %xmm1
+	mulsd	%xmm1, %xmm0
+	addq	$3, %rax
+	cmpq	%rdx, %rax
+	jl	.L20
+
+
+    xmm0                   rax
+     |                      |
+     |    _______load_______|
+     |   |  _____load_______|
+     |   | |                |
+     |  mulsd               |
+     |   |                  |
+     |   |  _____load_______|
+     |   | |                |
+     |  mulsd               |
+     |   |                  |
+     |   |                  |
+     mulsd                 addq
+        |                   | 
+        |                   |
+        v                   v
+
+
+1 mulsd instructions per iteration (with data dependencies) with 5 latency each
+3 elements computed per iteration
+CPE = 1 * 5 / 3 = 1.67
+
+
+A4: r = r * (x * (y  * z));
+------------------------------------------------------------------------------
+.L20:
+	movsd	8(%rdi,%rax,8), %xmm1
+	mulsd	16(%rdi,%rax,8), %xmm1
+	mulsd	(%rdi,%rax,8), %xmm1
+	mulsd	%xmm1, %xmm0
+	addq	$3, %rax
+	cmpq	%rdx, %rax
+	jl	.L20
+
+
+    xmm0                   rax
+     |                      |
+     |    _______load_______|
+     |   |  _____load_______|
+     |   | |                |
+     |  mulsd               |
+     |   |                  |
+     |   |  _____load_______|
+     |   | |                |
+     |  mulsd               |
+     |   |                  |
+     |   |                  |
+     mulsd                 addq
+        |                   | 
+        |                   |
+        v                   v
+
+
+1 mulsd instructions per iteration (with data dependencies) with 5 latency each
+3 elements computed per iteration
+CPE = 1 * 5 / 3 = 1.67
+
+
+A5: r = (r * x) * (y * z);
+------------------------------------------------------------------------------
+.L20:
+	mulsd	(%rdi,%rax,8), %xmm0
+	movsd	8(%rdi,%rax,8), %xmm1
+	mulsd	16(%rdi,%rax,8), %xmm1
+	mulsd	%xmm1, %xmm0
+	addq	$3, %rax
+	cmpq	%rdx, %rax
+	jl	.L20
+
+
+    xmm0                   rax
+     |                      |
+     |   ________load_______|
+     |  |                   | 
+     mulsd                  |
+     |                      |
+     |                      |
+     |    _______load_______|
+     |   |  _____load_______|
+     |   | |                |
+     |  mulsd               |
+     |   |                  |
+     |   |                  |
+     mulsd                  |
+        |                   |
+        |                   |
+        |  _____load________|
+        | |                 |
+       mulsd                |
+        |                   |
+        |                  addq
+        |                   |
+        v                   v
+
+
+2 mulsd instructions per iteration (with data dependencies) with 5 latency each
+3 elements computed per iteration
+CPE = 2 * 5 / 3 = 3.33
+
+
