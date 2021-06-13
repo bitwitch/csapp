@@ -3,10 +3,11 @@
 /* 5.5 */
 double poly(double a[], double x, long degree) {
     long i;
-    double result = a[0]; double xpwr = x;
+    double result = a[0]; 
+    double xpwr = x;
     for (i = 1; i <= degree; i++) {
         result += a[i] * xpwr;
-        xpwr = x * xpwr;
+        xpwr *= x;
     }
     return result;
 }

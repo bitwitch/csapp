@@ -1,4 +1,4 @@
-typedef int data_t;
+typedef float data_t;
 
 /* $begin adt */
 /* Create abstract data type for vector */
