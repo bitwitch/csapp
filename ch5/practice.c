@@ -71,27 +71,96 @@ double aprod(double a[], long n) {
     return r;
 }
 
+/* 5.9 */
+void merge(long src1[], long src2[], long dest[], long n) {
+    long i1 = 0;
+    long i2 = 0;
+    long id = 0;
+    while (i1 < n && i2 < n) {
+
+        if (src1[i1] < src2[i2]) {
+            dest[id] = src1[i1];
+            i1++;
+        } else {
+            dest[id] = src2[i2];
+            i2++;
+        }
+        id++;
+        
+
+        /*printf("&dest[%ld]: %p\n&src2[%ld]: %p\n", id, &dest[id], i2, &src2[i2]);*/
+
+        /*long minval = src1[i1] < src2[i2] ? src1[i1++] : src2[i2++];*/
+        /*dest[id] = 69;*/
+        /*id++;*/
+    }
+    /*while (i1 < n)*/
+        /*dest[id++] = src1[i1++];*/
+    /*while (i2 < n)*/
+        /*dest[id++] = src2[i2++];*/
+}
+
 
 int main() {
-    double a[6] = {3, 1, 4, 1, 5, 9};
-    double x = 3.14;
-    long degree = 5;
+    /*double a[6] = {3, 1, 4, 1, 5, 9};*/
+    /*double x = 3.14;*/
+    /*long degree = 5;*/
 
-    double poly_result = poly(a, x, degree);
-    double polyh_result = polyh(a, x, degree);
+    /*double poly_result = poly(a, x, degree);*/
+    /*double polyh_result = polyh(a, x, degree);*/
 
-    printf("poly result: %f\npolyh result: %f\n", poly_result, polyh_result);
+    /*printf("poly result: %f\npolyh result: %f\n", poly_result, polyh_result);*/
 
+    /*long len = 69;*/
+
+    /*vec_ptr v = new_vec(len);*/
+    /*for (int i=0; i<len; i++)*/
+        /*set_vec_element(v, i, i+1);*/
+
+    /*data_t combine5_result;*/
+    /*combine5(v, &combine5_result);*/
+
+    /*printf("combine5 result: %f\n", combine5_result); */
 
     long len = 69;
-    vec_ptr v = new_vec(len);
-    for (int i=0; i<len; i++)
-        set_vec_element(v, i, i+1);
 
-    data_t combine5_result;
-    combine5(v, &combine5_result);
+    long src1[69];
+    long src2[69];
+    long merged[69];
+    for (long i=0; i<len; i++) {
+        src1[i] = 2 * i;
+        src2[i] = 2 * i + 1;
+        merged[i] = 0;
+     }
 
-    printf("combine5 result: %f\n", combine5_result); 
+    printf("First 10 elements of src1:\n");
+    for (long i=0; i<10; i++) 
+        printf("%ld ", src1[i]);
+    printf("\n");
+
+    printf("First 10 elements of src2:\n");
+    for (long i=0; i<10; i++) 
+        printf("%ld ", src2[i]);
+    printf("\n");
+
+    merge(src1, src2, merged, len);
+
+    printf("\nMerged:\n\n");
+
+    printf("First 10 elements of src1:\n");
+    for (long i=0; i<10; i++) 
+        printf("%ld ", src1[i]);
+    printf("\n");
+
+    printf("First 10 elements of src2:\n");
+    for (long i=0; i<10; i++) 
+        printf("%ld ", src2[i]);
+    printf("\n");
+
+
+
+
+
 
     return 0;
 }
