@@ -3,60 +3,61 @@
 	.globl	new_vec
 	.type	new_vec, @function
 new_vec:
-.LFB11:
+.LFB16:
 	.cfi_startproc
-	pushq	%r12
-	.cfi_def_cfa_offset 16
-	.cfi_offset 12, -16
+	endbr64
 	pushq	%rbp
-	.cfi_def_cfa_offset 24
-	.cfi_offset 6, -24
+	.cfi_def_cfa_offset 16
+	.cfi_offset 6, -16
 	pushq	%rbx
+	.cfi_def_cfa_offset 24
+	.cfi_offset 3, -24
+	subq	$8, %rsp
 	.cfi_def_cfa_offset 32
-	.cfi_offset 3, -32
 	movq	%rdi, %rbp
 	movl	$24, %edi
-	call	malloc
+	call	malloc@PLT
 	movq	%rax, %rbx
 	testq	%rax, %rax
 	je	.L1
 	movq	%rbp, (%rax)
 	movq	%rbp, 16(%rax)
-	movl	$0, %r12d
 	testq	%rbp, %rbp
 	jg	.L6
+	movl	$0, %ebp
 .L3:
-	movq	%r12, 8(%rbx)
+	movq	%rbp, 8(%rbx)
 .L1:
 	movq	%rbx, %rax
-	popq	%rbx
+	addq	$8, %rsp
 	.cfi_remember_state
 	.cfi_def_cfa_offset 24
-	popq	%rbp
+	popq	%rbx
 	.cfi_def_cfa_offset 16
-	popq	%r12
+	popq	%rbp
 	.cfi_def_cfa_offset 8
 	ret
 .L6:
 	.cfi_restore_state
-	movl	$8, %esi
+	movl	$4, %esi
 	movq	%rbp, %rdi
-	call	calloc
-	movq	%rax, %r12
+	call	calloc@PLT
+	movq	%rax, %rbp
 	testq	%rax, %rax
 	jne	.L3
 	movq	%rbx, %rdi
-	call	free
-	movq	%r12, %rbx
+	call	free@PLT
+	movq	%rbp, %rbx
 	jmp	.L1
 	.cfi_endproc
-.LFE11:
+.LFE16:
 	.size	new_vec, .-new_vec
 	.globl	free_vec
 	.type	free_vec, @function
 free_vec:
-.LFB12:
+.LFB17:
 	.cfi_startproc
+	endbr64
 	pushq	%rbx
 	.cfi_def_cfa_offset 16
 	.cfi_offset 3, -16
@@ -64,78 +65,92 @@ free_vec:
 	movq	8(%rdi), %rdi
 	testq	%rdi, %rdi
 	je	.L8
-	call	free
+	call	free@PLT
 .L8:
 	movq	%rbx, %rdi
-	call	free
+	call	free@PLT
 	popq	%rbx
 	.cfi_def_cfa_offset 8
 	ret
 	.cfi_endproc
-.LFE12:
+.LFE17:
 	.size	free_vec, .-free_vec
 	.globl	get_vec_element
 	.type	get_vec_element, @function
 get_vec_element:
-.LFB13:
+.LFB18:
 	.cfi_startproc
-	movl	$0, %eax
+	endbr64
 	testq	%rsi, %rsi
-	js	.L10
+	js	.L12
 	cmpq	%rsi, (%rdi)
-	jle	.L10
+	jle	.L13
 	movq	8(%rdi), %rax
-	movsd	(%rax,%rsi,8), %xmm0
-	movsd	%xmm0, (%rdx)
+	movss	(%rax,%rsi,4), %xmm0
+	movss	%xmm0, (%rdx)
 	movl	$1, %eax
-.L10:
+	ret
+.L12:
+	movl	$0, %eax
+	ret
+.L13:
+	movl	$0, %eax
 	ret
 	.cfi_endproc
-.LFE13:
+.LFE18:
 	.size	get_vec_element, .-get_vec_element
 	.globl	vec_length
 	.type	vec_length, @function
 vec_length:
-.LFB14:
+.LFB19:
 	.cfi_startproc
+	endbr64
 	movq	(%rdi), %rax
 	ret
 	.cfi_endproc
-.LFE14:
+.LFE19:
 	.size	vec_length, .-vec_length
 	.globl	get_vec_start
 	.type	get_vec_start, @function
 get_vec_start:
-.LFB15:
+.LFB20:
 	.cfi_startproc
+	endbr64
 	movq	8(%rdi), %rax
 	ret
 	.cfi_endproc
-.LFE15:
+.LFE20:
 	.size	get_vec_start, .-get_vec_start
 	.globl	set_vec_element
 	.type	set_vec_element, @function
 set_vec_element:
-.LFB16:
+.LFB21:
 	.cfi_startproc
-	movl	$0, %eax
+	endbr64
 	testq	%rsi, %rsi
-	js	.L16
+	js	.L18
 	cmpq	%rsi, (%rdi)
-	jle	.L16
-	movq	8(%rdi), %rax
-	movsd	%xmm0, (%rax,%rsi,8)
+	jle	.L19
+	salq	$2, %rsi
+	addq	8(%rdi), %rsi
+	movss	%xmm0, (%rsi)
 	movl	$1, %eax
-.L16:
+	ret
+.L18:
+	movl	$0, %eax
+	ret
+.L19:
+	movl	$0, %eax
 	ret
 	.cfi_endproc
-.LFE16:
+.LFE21:
 	.size	set_vec_element, .-set_vec_element
 	.globl	set_vec_length
 	.type	set_vec_length, @function
 set_vec_length:
-.LFB17:
+.LFB22:
 	.cfi_startproc
+	endbr64
 	pushq	%rbp
 	.cfi_def_cfa_offset 16
 	.cfi_offset 6, -16
@@ -161,14 +176,31 @@ set_vec_length:
 .L23:
 	.cfi_restore_state
 	movq	8(%rdi), %rdi
-	call	free
-	movl	$8, %esi
+	call	free@PLT
+	movl	$4, %esi
 	movq	%rbp, %rdi
-	call	calloc
+	call	calloc@PLT
 	movq	%rax, 8(%rbx)
 	movq	%rbp, 16(%rbx)
 	jmp	.L21
 	.cfi_endproc
-.LFE17:
+.LFE22:
 	.size	set_vec_length, .-set_vec_length
-	.ident	"GCC: (GNU) 8.3.0"
+	.ident	"GCC: (Ubuntu 10.2.0-5ubuntu1~20.04) 10.2.0"
+	.section	.note.GNU-stack,"",@progbits
+	.section	.note.gnu.property,"a"
+	.align 8
+	.long	 1f - 0f
+	.long	 4f - 1f
+	.long	 5
+0:
+	.string	 "GNU"
+1:
+	.align 8
+	.long	 0xc0000002
+	.long	 3f - 2f
+2:
+	.long	 0x3
+3:
+	.align 8
+4:
