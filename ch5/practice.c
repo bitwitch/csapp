@@ -87,7 +87,7 @@ void merge(long src1[], long src2[], long dest[], long n) {
         /*}*/
         /*id++;*/
 
-        bool v1_is_min = src1[i1] < src2[i2];
+        int v1_is_min = src1[i1] < src2[i2];
         long min_val = v1_is_min ? src1[i1] : src2[i2];
         long *min_idx = v1_is_min ? &i1 : &i2;
         *min_idx = *min_idx + 1;
@@ -103,10 +103,12 @@ void merge(long src1[], long src2[], long dest[], long n) {
 void psum1(float a[], float p[], long n) {
     long i;
     p[0] = a[0];
-    for (i=1; i<n; i++)
-        p[i] = p[i-1] + a[i];
+    float sum = p[0];
+    for (i=1; i<n; i++) {
+        sum = sum + a[i];
+        p[i] = sum;
+    }
 }
-
 
 
 int main() {
@@ -149,12 +151,16 @@ int main() {
         }
         printf("%3ld ", merged[i]);
     }
-    printf("\n");
+    printf("\n\n");
 
 
 
+    float floats[len];
     float p[len];
-    psum1(src1, p, len);
+    for (int i=0; i<len; i++)
+        floats[i] = i * 3.14;
+
+    psum1(floats, p, len);
 
     j = 0;
     for (long i=0; i<len; i++, j++) {
@@ -162,9 +168,9 @@ int main() {
             printf("\n");
             j = 0;
         }
-        printf("%3ld ", p[i]);
+        printf("%9.4f ", p[i]);
     }
-    printf("\n");
+    printf("\n\n");
 
 
 
