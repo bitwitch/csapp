@@ -87,9 +87,9 @@ void merge(long src1[], long src2[], long dest[], long n) {
         /*}*/
         /*id++;*/
 
-
-        long min_val = src1[i1] < src2[i2] ? src1[i1] : src2[i2];
-        long *min_idx = src1[i1] < src2[i2] ? &i1 : &i2;
+        bool v1_is_min = src1[i1] < src2[i2];
+        long min_val = v1_is_min ? src1[i1] : src2[i2];
+        long *min_idx = v1_is_min ? &i1 : &i2;
         *min_idx = *min_idx + 1;
         dest[id++] = min_val;
     }
