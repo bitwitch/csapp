@@ -99,7 +99,15 @@ void merge(long src1[], long src2[], long dest[], long n) {
         dest[id++] = src2[i2++];
 }
 
-#define LENGTH 69
+/* 5.12 */
+void psum1(float a[], float p[], long n) {
+    long i;
+    p[0] = a[0];
+    for (i=1; i<n; i++)
+        p[i] = p[i-1] + a[i];
+}
+
+
 
 int main() {
     double a[6] = {3, 1, 4, 1, 5, 9};
@@ -142,6 +150,22 @@ int main() {
         printf("%3ld ", merged[i]);
     }
     printf("\n");
+
+
+
+    float p[len];
+    psum1(src1, p, len);
+
+    j = 0;
+    for (long i=0; i<len; i++, j++) {
+        if (j > 9) {
+            printf("\n");
+            j = 0;
+        }
+        printf("%3ld ", p[i]);
+    }
+    printf("\n");
+
 
 
     return 0;
