@@ -3,3 +3,4 @@ prog
 *.dSYM/**
 gmon.out
 notes.txt
+shell
