@@ -3,4 +3,5 @@ prog
 *.dSYM/**
 gmon.out
 notes.txt
-shell
+ch8/shell/shell
+infinite
