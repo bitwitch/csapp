@@ -12,7 +12,9 @@ Job *make_job(unsigned jid, pid_t pid, char *cmdline) {
 
     job->jid = jid;
     job->pid = pid;
+    job->completed = 0;
     job->stopped = 0;
+    job->notified = 0;
     job->last = NULL;
     job->next = NULL;
     strcpy(job->cmdline, cmdline);
@@ -22,7 +24,7 @@ Job *make_job(unsigned jid, pid_t pid, char *cmdline) {
         return job;
     }
 
-    // add to list of bg jobs
+    /* add to list of bg jobs */
     Job *j = first_job;
     while (j->next)
         j = j->next;
@@ -34,7 +36,6 @@ Job *make_job(unsigned jid, pid_t pid, char *cmdline) {
 
 void remove_job(Job *job) {
     Job *j;
-    // find job in list
     for (j = first_job; j; j = j->next) {
         if (j->pid == job->pid) {
             if (!j->last && !j->next)
@@ -75,10 +76,19 @@ int mark_process_status(pid_t pid, int status) {
     Job *j;
 
     if (pid > 0) {
-        /* Update the record for the process.  */
+        /* Update the record for the process. */
         for (j = first_job; j; j = j->next) {
             if (j->pid == pid) {
-                printf("[%d] %d %s", j->jid, j->pid, j->cmdline);
+                if (WIFSTOPPED(status)) {
+                    printf("job %d stopped\n", pid);
+                    j->stopped = 1;
+                } else {
+                    j->completed = 1;
+                    if (WIFSIGNALED(status))
+                        fprintf(stderr, "Job %d terminated by signal: %d\n", j->pid, WTERMSIG(status));
+                    else
+                        printf("job %d exited normally\n", pid);
+                }
                 return 0;
             }
         }
@@ -86,7 +96,7 @@ int mark_process_status(pid_t pid, int status) {
         return -1;
     }
     else if (pid == 0 || errno == ECHILD)
-        /* No processes ready to report.  */
+        /* No processes ready to report. */
         return -1;
     else {
         /* Other weird errors.  */
@@ -94,4 +104,22 @@ int mark_process_status(pid_t pid, int status) {
         return -1;
     }
 }
+
+void update_jobs() {
+    pid_t pid;
+    int status;
+
+    do 
+        pid = waitpid(-1, &status, WUNTRACED|WNOHANG);
+    while (!mark_process_status(pid, status));
+
+    Job *j;
+    for (j = first_job; j; j = j->next) {
+        if (j->completed)
+            remove_job(j);
+        else if (j->stopped && !j->notified)
+            j->notified = 1;
+    }
+}
+
 

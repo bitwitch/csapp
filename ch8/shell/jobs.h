@@ -6,7 +6,9 @@
 typedef struct Job {
     unsigned jid;
     pid_t pid;
+    int completed;
     int stopped;
+    int notified;
     struct Job *last;
     struct Job *next;
     char cmdline[MAXLINE];
@@ -17,6 +19,8 @@ void remove_job(Job *job);
 Job *job_with_jid(unsigned jid);
 Job *job_with_pid(pid_t pid);
 int mark_process_status(pid_t pid, int status);
+void update_jobs();
+void wait_for_job(Job *j);
 
 extern Job *first_job;
 

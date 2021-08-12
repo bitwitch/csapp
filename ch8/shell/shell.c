@@ -8,11 +8,8 @@
 void eval(char *cmdline);
 int parseline(char *buf, int *argc, char **argv);
 void sigint_handler(int sig);
-static int keyboard_terminate = -1;
-static jmp_buf env;
-static pid_t cpid;
 
-extern Job *first_job;
+static pid_t cpid;
 
 int main()
 {
@@ -32,12 +29,15 @@ int main()
 
         /* Evaluate */
         eval(cmdline);
+
+        /* Update job statuses */
+        update_jobs();
     }
 }
 
 void sigint_handler(int sig) {
-    keyboard_terminate = sig;
-    siglongjmp(env, 1);
+    if(!kill(-cpid, 0))
+        Kill(-cpid, sig);
 }
 
 /* eval - Evaluate a command line */
@@ -51,62 +51,58 @@ void eval(char *cmdline)
     static unsigned jid = 0; /* job id */
 
     strcpy(modified_cmdline, cmdline);
+
     bg = parseline(modified_cmdline, &argc, argv);
     if (argv[0] == NULL)
-        return;   /* Ignore empty lines */
+        return;  /* Ignore empty lines */
 
-    if (!builtin_command(argc, argv)) {        /* if built in, execute directly */
-        // create job here (with invalid jid and pid) so that the pointer is
-        // valid if signal handler runs
+    /* if built in, execute directly */
+    if (builtin_command(argc, argv))
+        return;
 
-        Signal(SIGINT, sigint_handler);
-        Signal(SIGTSTP, sigint_handler);
+    Signal(SIGINT, sigint_handler);
+    Signal(SIGTSTP, sigint_handler);
 
-        jid++;
+    jid++;
 
-        if ((cpid = Fork()) == 0) {   /* Child runs user job */
-            setpgid(getpid(), 0);
-            if (execve(argv[0], argv, environ) < 0) {
-                printf("%s: Command not found.\n", argv[0]);
-                exit(0);
-            }
-        } 
-
-        Job *j = make_job(jid, cpid, cmdline); 
-
-        if (sigsetjmp(env, 1) == 1) {
-            if(!bg && !kill(-cpid, 0))
-                Kill(-cpid, keyboard_terminate);
+    if ((cpid = Fork()) == 0) {   /* Child runs user job */
+        setpgid(getpid(), 0);
+        if (execve(argv[0], argv, environ) < 0) {
+            printf("%s: Command not found.\n", argv[0]);
+            exit(0);
         }
+    } 
 
-        /* Parent waits for foreground job to terminate */
-        if (!bg) {
-            int status;
-            if (waitpid(cpid, &status, WUNTRACED) > 0) {
-                if (WIFSIGNALED(status)) {
-                    remove_job(j);
-                    printf(" Job %d terminated by signal: %s\n", cpid, strsignal(WTERMSIG(status)));
-                } else if (WIFSTOPPED(status)) {
-                    j->stopped = 1;
-                    printf(" Job %d stopped by signal: %d\n", cpid, WSTOPSIG(status));
-                } else if (WIFEXITED(status)) {
-                    remove_job(j);
-                    //printf("Job %d exited with status %d\n", cpid, WEXITSTATUS(status));
-                } else {
-                    remove_job(j);
-                    printf("Job %d did not exit with a valid status\n", cpid);
-                }
-            }
-            else
-                unix_error("waitfg: waitpid error");
-        } else {
-            printf("[%d] %d   %s", j->jid, j->pid, j->cmdline);
-        }
+    Job *j = make_job(jid, cpid, cmdline); 
 
-        Signal(SIGINT, SIG_IGN);
-        Signal(SIGTSTP, SIG_IGN);
-    }
+    /* Parent waits for foreground job to terminate */
+    if (!bg)
+        wait_for_job(j);
+    else
+        printf("[%d] %d   %s", j->jid, j->pid, j->cmdline);
+
+    Signal(SIGINT, SIG_IGN);
+    Signal(SIGTSTP, SIG_IGN);
+
     return;
+}
+
+void wait_for_job(Job *j) {
+    int status;
+    if (waitpid(j->pid, &status, WUNTRACED) > 0) {
+        if (WIFSTOPPED(status)) {
+            j->stopped = 1;
+            printf(" Job %d stopped by signal: %d\n", j->pid, WSTOPSIG(status));
+        } else {
+            remove_job(j);
+            if (WIFSIGNALED(status))
+                printf(" Job %d terminated by signal: %s\n", j->pid, strsignal(WTERMSIG(status)));
+            else if (!WIFEXITED(status))
+                printf(" Job %d did not exit with a valid status\n", j->pid);
+        }
+    }
+    else
+        unix_error("waitfg: waitpid error");
 }
    
 /* parseline - Parse the command line and build the argv array */
@@ -141,6 +137,4 @@ int parseline(char *buf, int *arg_count, char **argv)
     *arg_count = argc;
     return bg;
 }
-
-
 

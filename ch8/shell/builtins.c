@@ -67,7 +67,6 @@ int command_bg(int argc, char **argv) {
     return 1;
 }
 
-/*
 int command_fg(int argc, char **argv) {
     if (argc < 2) {
         printf("Usage: fg <job>\n");
@@ -95,9 +94,9 @@ int command_fg(int argc, char **argv) {
     Kill(-j->pid, SIGCONT);
     j->stopped = 0;
 
-    if ()
+    // mark job as needing to continue in foreground
+    wait_for_job(j);
 
     return 1;
 }
 
-*/
