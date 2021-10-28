@@ -1,7 +1,7 @@
 #include <unistd.h>
 
 int main() {
-    alarm(60);
+    alarm(30);
     while(1) {}
     return 0;
 }
