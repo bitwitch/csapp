@@ -14,7 +14,7 @@
 /*
  * If NEXT_FIT defined use next fit search, else use first-fit search 
  */
-/*#define NEXT_FITx*/
+#define NEXT_FIT
 
 /* $begin mallocmacros */
 /* Basic constants and macros */
@@ -274,13 +274,45 @@ static void *extend_heap(size_t words)
 
 
 
-/* Practice problem 9.8 */
+/* Practice problem 9.8 (first fit) */
+/* Problem 9.17 (next fit) */
 
 /* 
  * find_fit - Find a fit for a block with asize bytes 
  */
 static void *find_fit(size_t asize)
 {
+#ifdef NEXT_FIT
+
+    char *old_rover = rover;
+    unsigned block_size; 
+    int allocated;
+
+    /* search from rover to end of free list */
+    while (1) {
+        block_size = GET_SIZE(HDRP(rover));
+        allocated = GET_ALLOC(HDRP(rover));
+        if (allocated && block_size == 0)
+            break;
+        if (!allocated && block_size >= asize)
+            return rover;
+        rover = NEXT_BLKP(rover);
+    }
+
+    /* search from beginning of free list to old_rover */
+    rover = heap_listp;
+    while (1) {
+        if (rover == old_rover)
+            return NULL;
+        block_size = GET_SIZE(HDRP(rover));
+        allocated = GET_ALLOC(HDRP(rover));
+        if (!allocated && block_size >= asize)
+            return rover;
+        rover = NEXT_BLKP(rover);
+    }
+
+#else 
+
     void *bp = heap_listp;
     unsigned block_size; 
     int allocated;
@@ -294,10 +326,13 @@ static void *find_fit(size_t asize)
             return bp;
         bp = NEXT_BLKP(bp);
     }
+
+#endif
 }
 
 
-/* Practice Problem 9.9 */
+/* Practice problem 9.9 (first fit) */
+/* Problem 9.17 (next fit) */
 
 /* 
  * place - Place block of asize bytes at start of free block bp 
@@ -312,6 +347,9 @@ static void place(void *bp, size_t asize)
         // allocate part of the block
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
+#ifdef NEXT_FIT
+        rover = NEXT_BLKP(bp);
+#endif
 
         // split remainder into a new free block
         char *split_block = (char *)bp + asize;
@@ -321,6 +359,9 @@ static void place(void *bp, size_t asize)
         // allocate the entire free block
         PUT(HDRP(bp), PACK(free_block_size, 1));
         PUT(FTRP(bp), PACK(free_block_size, 1));
+#ifdef NEXT_FIT
+        rover = NEXT_BLKP(bp);
+#endif
     }
 }
 
