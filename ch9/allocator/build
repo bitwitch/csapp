@@ -1,2 +1,2 @@
 #!/bin/bash
-gcc -pthread -Og -g *.c ../../csapp.c -o prog
+gcc -pthread -Og -g *.c -o prog

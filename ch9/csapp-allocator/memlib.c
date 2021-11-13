@@ -12,11 +12,13 @@
 #include <string.h>
 #include <errno.h>
 
+#include "../../csapp.h"
 #include "memlib.h"
-#include "error_handling.h"
 
 #define MAX_HEAP (20*(1<<20))  /* 20 MB */
 
+
+/* $begin memlib */
 /* Private global variables */
 static char *mem_heap;     /* Points to first byte of heap */ 
 static char *mem_brk;      /* Points to last byte of heap plus 1 */
@@ -27,11 +29,9 @@ static char *mem_max_addr; /* Max legal heap addr plus 1*/
  */
 void mem_init(void)
 {
-    mem_heap = (char *)malloc(MAX_HEAP);
-    if (mem_heap == NULL) 
-        unix_error("malloc error");
-    mem_brk = (char *)mem_heap;
-    mem_max_addr = (char *)(mem_heap + MAX_HEAP);
+    mem_heap = (char *)Malloc(MAX_HEAP);
+    mem_brk = (char *)mem_heap;               
+    mem_max_addr = (char *)(mem_heap + MAX_HEAP); 
 }
 
 /* 
@@ -44,13 +44,14 @@ void *mem_sbrk(int incr)
     char *old_brk = mem_brk;
 
     if ( (incr < 0) || ((mem_brk + incr) > mem_max_addr)) {
-        errno = ENOMEM;
-        fprintf(stderr, "ERROR: mem_sbrk failed. Ran out of memory...\n");
-        return (void *)-1;
+	errno = ENOMEM;
+	fprintf(stderr, "ERROR: mem_sbrk failed. Ran out of memory...\n");
+	return (void *)-1;
     }
     mem_brk += incr;
     return (void *)old_brk;
 }
+/* $end memlib */
 
 /* 
  * mem_deinit - free the storage used by the memory system model
