@@ -93,10 +93,13 @@ void *mm_malloc(size_t size)
         return NULL;
 
     // adjust size to adhere to alignment and size requirements
-    if (size < MIN_BLOCK_SIZE)
+    if (size <= MIN_BLOCK_SIZE - DSIZE)
         size = MIN_BLOCK_SIZE;
-    else if (size % DSIZE != 0)
-        size += DSIZE - (size % DSIZE);
+    else {
+        size += DSIZE;
+        if (size % DSIZE != 0)
+            size += DSIZE - (size % DSIZE);
+    }
 
     // find a free block of this size
     void *bp = find_fit(size);
