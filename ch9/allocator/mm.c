@@ -27,14 +27,16 @@
 
 /* Pack a size and allocated bit into a word */
 #define PACK(size, alloc)  ((size) | (alloc)) 
+#define PACKP(size, prev_alloc, alloc)  ((size) | (prev_alloc << 1) | (alloc))
 
 /* Read and write a word at address p */
 #define GET(p)       (*(unsigned int *)(p))
 #define PUT(p, val)  (*(unsigned int *)(p) = (val))
 
 /* Read the size and allocated fields from address p */
-#define GET_SIZE(p)  (GET(p) & ~0x7)
-#define GET_ALLOC(p) (GET(p) & 0x1)
+#define GET_SIZE(p)       (GET(p) & ~0x7)
+#define GET_ALLOC(p)      (GET(p) & 0x1)
+#define GET_PREV_ALLOC(p) (GET(p) & 0x2)
 
 /* Given block ptr bp, compute address of its header and footer */
 #define HDRP(bp)       ((char *)(bp) - WSIZE)
@@ -64,15 +66,14 @@ static void checkblock(void *bp);
  */
 int mm_init(void) 
 {
-    heap_listp = mem_sbrk(4*WSIZE);
+    heap_listp = mem_sbrk(3*WSIZE);
 
     if (heap_listp == (char *)-1)
         return -1;
 
     PUT(heap_listp, 0);
-    PUT(heap_listp + (1*WSIZE), PACK(2*WSIZE, 1)); // prologue header
-    PUT(heap_listp + (2*WSIZE), PACK(2*WSIZE, 1)); // prologue footer
-    PUT(heap_listp + (3*WSIZE), PACK(0, 1));       // epilogue header
+    PUT(heap_listp + (1*WSIZE), PACK(2*WSIZE, 1, 1)); // prologue header
+    PUT(heap_listp + (2*WSIZE), PACK(0, 1, 1));        // epilogue header
     
     heap_listp += 2*WSIZE;
 
@@ -127,6 +128,8 @@ void mm_free(void *bp)
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
     coalesce(bp);
+
+    // mark as not allocated in the next block 
 }
 
 /*
@@ -134,7 +137,7 @@ void mm_free(void *bp)
  */
 static void *coalesce(void *bp) 
 {
-    int prev_alloc = GET_ALLOC(HDRP(PREV_BLKP(bp)));
+    int prev_alloc = GET_PREV_ALLOC(HDRP(bp));
     int next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     unsigned int current_size = GET_SIZE(HDRP(bp));
 
@@ -144,23 +147,27 @@ static void *coalesce(void *bp)
 
     else if (prev_alloc && !next_alloc) {      /* Case 2 */
         unsigned int next_size = GET_SIZE(HDRP(NEXT_BLKP(bp)));
-        PUT(HDRP(bp), PACK(current_size + next_size, 0));
-        PUT(FTRP(bp), PACK(current_size + next_size, 0));
+        PUT(HDRP(bp), PACK(current_size + next_size, prev_alloc, 0));
+        PUT(FTRP(bp), PACK(current_size + next_size, prev_alloc, 0));
     }
 
     else if (!prev_alloc && next_alloc) {      /* Case 3 */
-        unsigned int prev_size = GET_SIZE(HDRP(PREV_BLKP(bp)));
-        bp = PREV_BLKP(bp);
-        PUT(HDRP(bp), PACK(prev_size + current_size, 0));
-        PUT(FTRP(bp), PACK(prev_size + current_size, 0));
+        void *prev_bp = PREV_BLKP(bp);
+        unsigned int prev_size = GET_SIZE(HDRP(prev_bp));
+        int prev_prev_alloc = GET_PREV_ALLOC(HDRP(prev_bp));
+        PUT(HDRP(prev_bp), PACK(prev_size + current_size, prev_prev_alloc, 0));
+        PUT(FTRP(prev_bp), PACK(prev_size + current_size, prev_prev_alloc, 0));
+        bp = prev_bp;
     }
 
     else {                                     /* Case 4 */
-        unsigned int prev_size = GET_SIZE(HDRP(PREV_BLKP(bp)));
+        void *prev_bp = PREV_BLKP(bp);
+        unsigned int prev_size = GET_SIZE(HDRP(prev_bp));
         unsigned int next_size = GET_SIZE(HDRP(NEXT_BLKP(bp)));
-        bp = PREV_BLKP(bp);
-        PUT(HDRP(bp), PACK(prev_size + current_size + next_size, 0));
-        PUT(FTRP(bp), PACK(prev_size + current_size + next_size, 0));
+        int prev_prev_alloc = GET_PREV_ALLOC(HDRP(prev_bp));
+        PUT(HDRP(prev_bp), PACK(prev_size + current_size + next_size, prev_prev_alloc, 0));
+        PUT(FTRP(prev_bp), PACK(prev_size + current_size + next_size, prev_prev_alloc, 0));
+        bp = prev_bp;
     }
 
 #ifdef NEXT_FIT
@@ -205,11 +212,13 @@ static void *extend_heap(size_t words)
     if (free_block == (void *)-1)
         return NULL;
 
-    PUT(HDRP(free_block), PACK(aligned_size, 0));
-    PUT(FTRP(free_block), PACK(aligned_size, 0));
+    int prev_alloc = GET_PREV_ALLOC(HDRP(free_block))
+
+    PUT(HDRP(free_block), PACK(aligned_size, prev_alloc, 0));
+    PUT(FTRP(free_block), PACK(aligned_size, prev_alloc, 0));
 
     // create new epilogue
-    PUT(HDRP(NEXT_BLKP(free_block)), PACK(0, 1));
+    PUT(HDRP(NEXT_BLKP(free_block)), PACK(0, 0, 1));
 
     return coalesce(free_block);
 }
@@ -277,6 +286,7 @@ static void place(void *bp, size_t asize)
 {
     size_t free_block_size = GET_SIZE(HDRP(bp));
     size_t remainder = free_block_size - asize;
+    int prev_alloc = GET_PREV_ALLOC(HDRP(bp));
 
     if (remainder >= MIN_BLOCK_SIZE) {
         // allocate part of the block
