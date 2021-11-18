@@ -14,7 +14,7 @@
 /*
  * If NEXT_FIT defined use next fit search, else use first-fit search 
  */
-/*#define NEXT_FIT*/
+#define NEXT_FIT
 
 /* Basic constants and macros */
 #define WSIZE       4       /* Word and header/footer size (bytes) */
@@ -26,7 +26,8 @@
 #define MAX(x, y) ((x) > (y)? (x) : (y))  
 
 /* Pack a size and allocated bit into a word */
-#define PACK(size, prev_alloc, alloc)  ((size) | (prev_alloc << 1) | (alloc))
+#define PACK(size, alloc)  ((size) | (alloc)) 
+#define PACKP(size, prev_alloc, alloc)  ((size) | (prev_alloc << 1) | (alloc))
 
 /* Read and write a word at address p */
 #define GET(p)       (*(unsigned int *)(p))
@@ -71,7 +72,7 @@ int mm_init(void)
         return -1;
 
     PUT(heap_listp, 0);
-    PUT(heap_listp + (1*WSIZE), PACK(WSIZE, 1, 1)); // prologue header
+    PUT(heap_listp + (1*WSIZE), PACK(2*WSIZE, 1, 1)); // prologue header
     PUT(heap_listp + (2*WSIZE), PACK(0, 1, 1));        // epilogue header
     
     heap_listp += 2*WSIZE;
@@ -92,11 +93,11 @@ void *mm_malloc(size_t size)
     if (size == 0)
         return NULL;
 
-    // adjust size to include overhead and adhere to alignment
-    if (size <= MIN_BLOCK_SIZE - WSIZE)
+    // adjust size to adhere to alignment and size requirements
+    if (size <= MIN_BLOCK_SIZE - DSIZE)
         size = MIN_BLOCK_SIZE;
     else {
-        size += WSIZE;
+        size += DSIZE;
         if (size % DSIZE != 0)
             size += DSIZE - (size % DSIZE);
     }
@@ -124,17 +125,11 @@ void mm_free(void *bp)
 {
     // mark the header and footer as not allocated
     unsigned int size = GET_SIZE(HDRP(bp));
-    int prev_alloc = GET_PREV_ALLOC(HDRP(bp));
-    PUT(HDRP(bp), PACK(size, prev_alloc, 0));
-    PUT(FTRP(bp), PACK(size, prev_alloc, 0));
+    PUT(HDRP(bp), PACK(size, 0));
+    PUT(FTRP(bp), PACK(size, 0));
+    coalesce(bp);
 
     // mark as not allocated in the next block 
-    void *next_bp = NEXT_BLKP(bp);
-    unsigned int next_size = GET_SIZE(HDRP(next_bp));
-    int next_alloc = GET_ALLOC(HDRP(next_bp));
-    PUT(next_bp, PACK(next_size, 0, next_alloc));
-
-    coalesce(bp);
 }
 
 /*
@@ -217,7 +212,7 @@ static void *extend_heap(size_t words)
     if (free_block == (void *)-1)
         return NULL;
 
-    int prev_alloc = GET_PREV_ALLOC(HDRP(free_block));
+    int prev_alloc = GET_PREV_ALLOC(HDRP(free_block))
 
     PUT(HDRP(free_block), PACK(aligned_size, prev_alloc, 0));
     PUT(FTRP(free_block), PACK(aligned_size, prev_alloc, 0));
@@ -295,19 +290,24 @@ static void place(void *bp, size_t asize)
 
     if (remainder >= MIN_BLOCK_SIZE) {
         // allocate part of the block
-        PUT(HDRP(bp), PACK(asize, prev_alloc, 1));
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+#ifdef NEXT_FIT
+        rover = NEXT_BLKP(bp);
+#endif
+
         // split remainder into a new free block
-        char *split_block = NEXT_BLKP(bp);
-        PUT(HDRP(split_block), PACK(remainder, 1, 0));
-        PUT(FTRP(split_block), PACK(remainder, 1, 0));
+        char *split_block = (char *)bp + asize;
+        PUT(HDRP(split_block), PACK(remainder, 0));
+        PUT(FTRP(split_block), PACK(remainder, 0));
     } else {
         // allocate the entire free block
-        PUT(HDRP(bp), PACK(free_block_size, prev_alloc, 1));
-    }
-
+        PUT(HDRP(bp), PACK(free_block_size, 1));
+        PUT(FTRP(bp), PACK(free_block_size, 1));
 #ifdef NEXT_FIT
-    rover = NEXT_BLKP(bp);
+        rover = NEXT_BLKP(bp);
 #endif
+    }
 }
 
 
