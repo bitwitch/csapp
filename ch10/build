@@ -1,0 +1,2 @@
+#!/bin/bash
+gcc -pthread -Og -o prog problems.c ../csapp.c
