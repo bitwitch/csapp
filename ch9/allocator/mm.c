@@ -190,7 +190,6 @@ static void *coalesce(void *bp)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-
 }
 
 /* 
