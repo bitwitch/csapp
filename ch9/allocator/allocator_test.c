@@ -146,63 +146,44 @@ void test_custom_malloc() {
     printf("Total requested:  %ld bytes\n", total_requested);
 }
 
+void test_two_blocks() {
+    /*mem_init();*/
+    /*mm_init();*/
+
+    char *first_block  = mm_malloc(16);
+    char *second_block = mm_malloc(16);
+
+    for (int i=0; i<16; i++) 
+        first_block[i] = 0x69;
+
+    for (int i=0; i<16; i++) 
+        second_block[i] = 0x42;
+
+    printf("\nfirst_block: %#x %#x %#x %#x\n", 
+            *((int *)first_block+0),
+            *((int *)first_block+1),
+            *((int *)first_block+2),
+            *((int *)first_block+3));
+
+    printf("second_block: %#x %#x %#x %#x\n", 
+            *((int *)second_block+0),
+            *((int *)second_block+1),
+            *((int *)second_block+2),
+            *((int *)second_block+3));
+
+    mm_free(first_block);
+    mm_free(second_block);
+}
 
 int main() {
 
     test_malloc();
     test_custom_malloc();
-    return 0;
 
-    mem_init();
-    mm_init();
-
-    printf("Initial heap check:\n");
-    mm_checkheap(1);
-
-    char *blocks[NUM_BLOCKS];
-
-    srand(time(0));
-
-    char *bp;
-    for (int i=0; i<NUM_BLOCKS; i++) {
-        size_t block_size = (rand() % 2048) + 1;
-
-        printf("allocating new block: %ld bytes\n", block_size);
-
-        bp = (char *)mm_malloc(block_size);
-        if (bp == NULL) {
-            printf("mm_malloc failed.\n");
-            return 1;
-        }
-        /*printf("allocated %d bytes at %p\n", BLOCK_SIZE, bp);*/
-        blocks[i] = bp;
-    }
-
-    printf("Before freeing check:\n");
-    mm_checkheap(1);
-
-    for (int i = 0; i < NUM_BLOCKS; i += (rand() % 3) + 1) {
-        mm_free(blocks[i]);
-        blocks[i] = NULL;
-    }
-
-    for (int i = 0; i < NUM_BLOCKS; i++) {
-        if (blocks[i] != NULL)
-            continue;
-        size_t block_size = (rand() % 2048) + 1;
-        bp = (char *)mm_malloc(block_size);
-        if (bp == NULL) {
-            printf("mm_malloc failed.\n");
-            return 1;
-        }
-        /*printf("allocated %d bytes at %p\n", BLOCK_SIZE, bp);*/
-        blocks[i] = bp;
-    }
-
-    printf("Post heap check:\n");
-    mm_checkheap(1);
+    test_two_blocks();
 
     return 0;
+
 }
 
 
