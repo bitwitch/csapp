@@ -8,8 +8,10 @@
  */
 #include "csapp.h"
 
+#define MAXHEADERS 256
+
 void doit(int fd);
-void read_requesthdrs(rio_t *rp);
+void read_requesthdrs(rio_t *rp, char **headers, int *header_count);
 int parse_uri(char *uri, char *filename, char *cgiargs);
 void serve_static(int fd, char *method, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
@@ -56,6 +58,8 @@ void doit(int fd)
     struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
     char filename[MAXLINE], cgiargs[MAXLINE];
+    char *headers[MAXHEADERS];
+    int header_count = 0;
     rio_t rio;
 
     /* Read request line and headers */
@@ -63,17 +67,25 @@ void doit(int fd)
     if (!Rio_readlineb(&rio, buf, MAXLINE))  
         return;
     printf("%s", buf);
-    sscanf(buf, "%s %s %s", method, uri, version);       
+    sscanf(buf, "%s %s %s", method, uri, version);
 
-    if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
+    if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD") && strcasecmp(method, "POST")) {
         clienterror(fd, method, "501", "Not Implemented",
                     "Tiny does not implement this method");
         return;
-    }                                                    
+    }
 
-    read_requesthdrs(&rio);
 
-    /* Parse URI from GET request */
+    read_requesthdrs(&rio, headers, &header_count);
+
+    for (int i=0; i<header_count; i++)
+        printf("%s", headers[i]);
+
+    for (int i=0; i<header_count; i++)
+        Free(headers[i]);
+    header_count = 0;
+
+    /* Parse URI from request */
     is_static = parse_uri(uri, filename, cgiargs);
     if (stat(filename, &sbuf) < 0) {                     
         clienterror(fd, filename, "404", "Not found",
@@ -81,10 +93,15 @@ void doit(int fd)
         return;
     }                                                    
 
-    if (is_static) { /* Serve static content */          
+    if (is_static) { /* Serve static content */
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) { 
             clienterror(fd, filename, "403", "Forbidden",
                 "Tiny couldn't read the file");
+            return;
+        }
+        if (strcasecmp(method, "GET")) {
+            clienterror(fd, method, "405", "Method Not Allowed",
+                    "This method is not supported by the target resource");
             return;
         }
         serve_static(fd, method, filename, sbuf.st_size);
@@ -104,15 +121,18 @@ void doit(int fd)
  * read_requesthdrs - read HTTP request headers
  */
 /* $begin read_requesthdrs */
-void read_requesthdrs(rio_t *rp) 
+void read_requesthdrs(rio_t *rp, char **headers, int *header_count) 
 {
     char buf[MAXLINE];
+    char *header;
+    ssize_t header_bytes;
 
-    Rio_readlineb(rp, buf, MAXLINE);
-    printf("%s", buf);
-    while(strcmp(buf, "\r\n")) {          
-        Rio_readlineb(rp, buf, MAXLINE);
-        printf("%s", buf);
+    header_bytes = Rio_readlineb(rp, buf, MAXLINE);
+    while(strcmp(buf, "\r\n")) {
+        header = (char *)Malloc(header_bytes);
+        strcpy(header, buf);
+        headers[header_count++] = header;
+        header_bytes = Rio_readlineb(rp, buf, MAXLINE);
     }
     return;
 }
