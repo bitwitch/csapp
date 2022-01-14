@@ -16,6 +16,7 @@ void get_filetype(char *filename, char *filetype);
 void serve_dynamic(int fd, char *filename, char *cgiargs);
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
+void reap_children(int signum);
 
 int main(int argc, char **argv) 
 {
@@ -29,6 +30,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: %s <port>\n", argv[0]);
         exit(1);
     }
+
+    Signal(SIGCHLD, reap_children);
 
     listenfd = Open_listenfd(argv[1]);
     while (1) {
@@ -193,6 +196,15 @@ void get_filetype(char *filename, char *filetype)
 }  
 /* $end serve_static */
 
+
+/* SIGCHLD handler */
+void reap_children(int signum) {
+    pid_t cpid;
+    do {
+        cpid = wait(NULL);
+    } while(cpid != -1 && errno != ECHILD);
+}
+
 /*
  * serve_dynamic - run a CGI program on behalf of the client
  */
@@ -207,13 +219,12 @@ void serve_dynamic(int fd, char *filename, char *cgiargs)
     sprintf(buf, "Server: Tiny Web Server\r\n");
     Rio_writen(fd, buf, strlen(buf));
   
-    if (Fork() == 0) { /* Child */ //line:netp:servedynamic:fork
-	/* Real server would set all CGI vars here */
-	setenv("QUERY_STRING", cgiargs, 1); //line:netp:servedynamic:setenv
-	Dup2(fd, STDOUT_FILENO);         /* Redirect stdout to client */ //line:netp:servedynamic:dup2
-	Execve(filename, emptylist, environ); /* Run CGI program */ //line:netp:servedynamic:execve
+    if (Fork() == 0) { /* Child */
+        /* Real server would set all CGI vars here */
+        setenv("QUERY_STRING", cgiargs, 1); 
+        Dup2(fd, STDOUT_FILENO);         /* Redirect stdout to client */ 
+        Execve(filename, emptylist, environ); /* Run CGI program */ 
     }
-    Wait(NULL); /* Parent waits for and reaps child */ //line:netp:servedynamic:wait
 }
 /* $end serve_dynamic */
 
