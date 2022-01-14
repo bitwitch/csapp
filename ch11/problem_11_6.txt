@@ -1,0 +1,115 @@
+D. Request Headers
+
+Host: localhost:8099
+  The Host request-header field specifies the Internet host and port number of
+  the resource being requested, as obtained from the original URI given by the
+  user or referring resource (generally an HTTP URL, as described in section
+  3.2.2). The Host field value MUST represent the naming authority of the origin
+  server or gateway given by the original URL. This allows the origin server or
+  gateway to differentiate between internally-ambiguous URLs, such as the root
+  "/" URL of a server for multiple host names on a single IP address.  A "host"
+  without any trailing port information implies the default port for the service
+  requested (e.g., "80" for an HTTP URL).  A client MUST include a Host header
+  field in all HTTP/1.1 request messages . If the requested URI does not include
+  an Internet host name for the service being requested, then the Host header
+  field MUST be given with an empty value. An HTTP/1.1 proxy MUST ensure that
+  any request message it forwards does contain an appropriate Host header field
+  that identifies the service being requested by the proxy. All Internet-based
+  HTTP/1.1 servers MUST respond with a 400 (Bad Request) status code to any
+  HTTP/1.1 request message which lacks a Host header field.
+
+
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:95.0) Gecko/20100101 Firefox/95.0
+  The User-Agent request-header field contains information about the user agent
+  originating the request. This is for statistical purposes, the tracing of
+  protocol violations, and automated recognition of user agents for the sake of
+  tailoring responses to avoid particular user agent limitations. User agents
+  SHOULD include this field with requests. The field can contain multiple
+  product tokens (section 3.8) and comments identifying the agent and any
+  subproducts which form a significant part of the user agent. By convention,
+  the product tokens are listed in order of their significance for identifying
+  the application.
+
+
+Accept: image/avif,image/webp,*/*
+  The Accept request-header field can be used to specify certain media types
+  which are acceptable for the response. Accept headers can be used to indicate
+  that the request is specifically limited to a small set of desired types, as
+  in the case of a request for an in-line image.  The asterisk "*" character is
+  used to group media types into ranges, with "*/*" indicating all media types
+  and "type/*" indicating all subtypes of that type. The media-range MAY include
+  media type parameters that are applicable to that range.  Each media-range MAY
+  be followed by one or more accept-params, beginning with the "q" parameter for
+  indicating a relative quality factor. The first "q" parameter (if any)
+  separates the media-range parameter(s) from the accept-params. Quality factors
+  allow the user or user agent to indicate the relative degree of preference for
+  that media-range, using the qvalue scale from 0 to 1 (section 3.9). The
+  default value is q=1.
+
+
+Accept-Language: en-US,en;q=0.5
+  The Accept-Language request-header field is similar to Accept, but restricts
+  the set of natural languages that are preferred as a response to the request.
+  Language tags are defined in section 3.10.  Each language-range MAY be given
+  an associated quality value which represents an estimate of the user's
+  preference for the languages specified by that range. The quality value
+  defaults to "q=1".
+
+
+Accept-Encoding: gzip, deflate
+  The Accept-Encoding request-header field is similar to Accept, but restricts
+  the content-codings (section 3.5) that are acceptable in the response.  A
+  server tests whether a content-coding is acceptable, according to an
+  Accept-Encoding field, using these rules:
+
+  1. If the content-coding is one of the content-codings listed in
+     the Accept-Encoding field, then it is acceptable, unless it is
+     accompanied by a qvalue of 0. (As defined in section 3.9, a
+     qvalue of 0 means "not acceptable.")
+
+  2. The special "*" symbol in an Accept-Encoding field matches any
+     available content-coding not explicitly listed in the header
+     field.
+
+  3. If multiple content-codings are acceptable, then the acceptable
+     content-coding with the highest non-zero qvalue is preferred.
+
+  4. The "identity" content-coding is always acceptable, unless
+     specifically refused because the Accept-Encoding field includes
+     "identity;q=0", or because the field includes "*;q=0" and does
+     not explicitly include the "identity" content-coding. If the
+     Accept-Encoding field-value is empty, then only the "identity"
+     encoding is acceptable.
+
+  If an Accept-Encoding field is present in a request, and if the server cannot
+  send a response which is acceptable according to the Accept-Encoding header,
+  then the server SHOULD send an error response with the 406 (Not Acceptable)
+  status code.
+
+  If no Accept-Encoding field is present in a request, the server MAY assume
+  that the client will accept any content coding. In this case, if "identity" is
+  one of the available content-codings, then the server SHOULD use the
+  "identity" content-coding, unless it has additional information that a
+  different content-coding is meaningful to the client.
+
+
+Connection: keep-alive
+  The Connection general-header field allows the sender to specify options that
+  are desired for that particular connection and MUST NOT be communicated by
+  proxies over further connections. If the value sent is keep-alive, the
+  connection is persistent and not closed, allowing for subsequent requests to
+  the same server to be done.
+
+
+Referer: http://localhost:8099/
+  The Referer[sic] request-header field allows the client to specify, for the
+  server's benefit, the address (URI) of the resource from which the Request-URI
+  was obtained (the "referrer", although the header field is misspelled.) The
+  Referer request-header allows a server to generate lists of back-links to
+  resources for interest, logging, optimized caching, etc. It also allows
+  obsolete or mistyped links to be traced for maintenance. The Referer field
+  MUST NOT be sent if the Request-URI was obtained from a source that does not
+  have its own URI, such as input from the user keyboard.  If the field value is
+  a relative URI, it SHOULD be interpreted relative to the Request-URI. The URI
+  MUST NOT include a fragment. See section 15.1.3 for security considerations.
+
