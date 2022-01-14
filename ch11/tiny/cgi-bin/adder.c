@@ -15,8 +15,10 @@ int main(void) {
         *p = '\0';
         strcpy(arg1, buf);
         strcpy(arg2, p+1);
-        n1 = atoi(arg1);
-        n2 = atoi(arg2);
+        p = strchr(arg1, '=');
+        n1 = p == NULL ? atoi(arg1) : atoi(p+1);
+        p = strchr(arg2, '=');
+        n2 = p == NULL ? atoi(arg2) : atoi(p+1);
     }
 
     /* Make the response body */
