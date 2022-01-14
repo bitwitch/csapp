@@ -1,2 +1,3 @@
 #!/bin/bash
 clang -I../.. -o server tiny.c ../../csapp.c
+clang -I../.. -o cgi-bin/adder cgi-bin/adder.c ../../csapp.c
