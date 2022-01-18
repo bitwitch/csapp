@@ -8,10 +8,27 @@
  */
 #include "csapp.h"
 
-#define MAXHEADERS 256
+#define MAXHEADERS 64
+#define MAX_REQUEST_BODY_BYTES 2048
+#define MAX_HEADERS_BYTES 2048
 
-void doit(int fd);
-void read_requesthdrs(rio_t *rp, char **headers, int *header_count);
+typedef struct {
+    char *name;
+    char *value;
+} http_header_t;
+
+typedef struct {
+    int is_static;
+    int header_count;
+    char method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+    char filename[MAXLINE], cgiargs[MAXLINE];
+    http_header_t headers[MAXHEADERS];
+    char headers_buffer[MAX_HEADERS_BYTES];
+    char body[MAX_REQUEST_BODY_BYTES];
+} request_t;
+
+void doit(int fd, request_t *request);
+void read_requesthdrs(rio_t *rp, request_t *request);
 int parse_uri(char *uri, char *filename, char *cgiargs);
 void serve_static(int fd, char *method, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
@@ -19,6 +36,7 @@ void serve_dynamic(int fd, char *method, char *filename, char *cgiargs);
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
 void reap_children(int signum);
+void reset_request(request_t *request);
 
 int main(int argc, char **argv) 
 {
@@ -33,106 +51,129 @@ int main(int argc, char **argv)
         exit(1);
     }
 
+    request_t *request = Malloc(sizeof(request_t));
+
     Signal(SIGCHLD, reap_children);
 
     listenfd = Open_listenfd(argv[1]);
+
     while (1) {
 	clientlen = sizeof(clientaddr);
 	connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen); 
         Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAXLINE, 
                     port, MAXLINE, 0);
         printf("Accepted connection from (%s, %s)\n", hostname, port);
-        doit(connfd);                                             
-        Close(connfd);                                            
+        reset_request(request);
+        doit(connfd, request);
+        Close(connfd);
     }
+
+    Free(request);
 }
+
+
 /* $end tinymain */
 
 /*
  * doit - handle one HTTP request/response transaction
  */
 /* $begin doit */
-void doit(int fd) 
+void doit(int fd, request_t *request) 
 {
-    int is_static;
     struct stat sbuf;
-    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char filename[MAXLINE], cgiargs[MAXLINE];
-    char *headers[MAXHEADERS];
-    int header_count = 0;
+    char buf[MAXLINE];
     rio_t rio;
 
     /* Read request line and headers */
     Rio_readinitb(&rio, fd);
-    if (!Rio_readlineb(&rio, buf, MAXLINE))  
+    if (!Rio_readlineb(&rio, buf, MAXLINE))
         return;
     printf("%s", buf);
-    sscanf(buf, "%s %s %s", method, uri, version);
+    sscanf(buf, "%s %s %s", request->method, request->uri, request->version);
 
-    if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD") && strcasecmp(method, "POST")) {
-        clienterror(fd, method, "501", "Not Implemented",
+    if (0 != strcasecmp(request->method, "GET") && 
+        0 != strcasecmp(request->method, "HEAD") &&  
+        0 != strcasecmp(request->method, "POST")) 
+    {
+        clienterror(fd, request->method, "501", "Not Implemented",
                     "Tiny does not implement this method");
         return;
     }
 
+    read_requesthdrs(&rio, request);
 
-    read_requesthdrs(&rio, headers, &header_count);
-
-    for (int i=0; i<header_count; i++)
-        printf("%s", headers[i]);
-
-    for (int i=0; i<header_count; i++)
-        Free(headers[i]);
-    header_count = 0;
+    for (int i=0; i<request->header_count; i++)
+        printf("[%d] %s: %s\n", i, request->headers[i].name, request->headers[i].value);
 
     /* Parse URI from request */
-    is_static = parse_uri(uri, filename, cgiargs);
-    if (stat(filename, &sbuf) < 0) {                     
-        clienterror(fd, filename, "404", "Not found",
+    request->is_static = parse_uri(request->uri, request->filename, request->cgiargs);
+    if (stat(request->filename, &sbuf) < 0) {                     
+        clienterror(fd, request->filename, "404", "Not found",
 		    "Tiny couldn't find this file");
         return;
     }                                                    
 
-    if (is_static) { /* Serve static content */
+    if (request->is_static) { /* Serve static content */
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) { 
-            clienterror(fd, filename, "403", "Forbidden",
+            clienterror(fd, request->filename, "403", "Forbidden",
                 "Tiny couldn't read the file");
             return;
         }
-        if (strcasecmp(method, "GET")) {
-            clienterror(fd, method, "405", "Method Not Allowed",
+        if (0 != strcasecmp(request->method, "GET")) {
+            clienterror(fd, request->method, "405", "Method Not Allowed",
                     "This method is not supported by the target resource");
             return;
         }
-        serve_static(fd, method, filename, sbuf.st_size);
+        serve_static(fd, request->method, request->filename, sbuf.st_size);
     }
     else { /* Serve dynamic content */
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) { 
-            clienterror(fd, filename, "403", "Forbidden",
+            clienterror(fd, request->filename, "403", "Forbidden",
                 "Tiny couldn't run the CGI program");
             return;
         }
-        serve_dynamic(fd, method, filename, cgiargs);
+        serve_dynamic(fd, request->method, request->filename, request->cgiargs);
     }
 }
 /* $end doit */
+
+
+void reset_request(request_t *request) {
+    request->is_static = 0;
+    request->header_count = 0;
+    memset(request->headers, 0, MAXHEADERS * sizeof(http_header_t));
+}
+
 
 /*
  * read_requesthdrs - read HTTP request headers
  */
 /* $begin read_requesthdrs */
-void read_requesthdrs(rio_t *rp, char **headers, int *header_count) 
+void read_requesthdrs(rio_t *rp, request_t *request)
 {
-    char buf[MAXLINE];
-    char *header;
+    char line[MAXLINE];
     ssize_t header_bytes;
+    http_header_t *headers = request->headers;
+    char *p = request->headers_buffer;
 
-    header_bytes = Rio_readlineb(rp, buf, MAXLINE);
-    while(strcmp(buf, "\r\n")) {
-        header = (char *)Malloc(header_bytes);
-        strcpy(header, buf);
-        headers[header_count++] = header;
-        header_bytes = Rio_readlineb(rp, buf, MAXLINE);
+    header_bytes = Rio_readlineb(rp, line, MAXLINE);
+    while(strcmp(line, "\r\n")) {
+        strcpy(p, line);
+
+        /* get header value */
+        char *sep = strchr(p, ':');
+        *sep = '\0';
+        sep++;
+        if (*sep == ' ') sep++;
+        char *newline = strchr(sep, '\r');
+        *newline = '\0';
+
+        headers[request->header_count].name = p;
+        headers[request->header_count].value = sep;
+        
+        p = newline + 1;
+        request->header_count++;
+        header_bytes = Rio_readlineb(rp, line, MAXLINE);
     }
     return;
 }
