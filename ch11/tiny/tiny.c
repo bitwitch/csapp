@@ -21,7 +21,7 @@ typedef struct {
     int is_static;
     int header_count;
     char method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char filename[MAXLINE], cgiargs[MAXLINE];
+    char filename[MAXLINE], query_string[MAXLINE];
     http_header_t headers[MAXHEADERS];
     char headers_buffer[MAX_HEADERS_BYTES];
     char body[MAX_REQUEST_BODY_BYTES];
@@ -29,14 +29,15 @@ typedef struct {
 
 void doit(int fd, request_t *request);
 void read_requesthdrs(rio_t *rp, request_t *request);
-int parse_uri(char *uri, char *filename, char *cgiargs);
+int parse_uri(char *uri, char *filename, char *query_string);
 void serve_static(int fd, char *method, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
-void serve_dynamic(int fd, char *method, char *filename, char *cgiargs);
+void serve_dynamic(int fd, char *method, char *filename, char *query_string);
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
 void reap_children(int signum);
 void reset_request(request_t *request);
+char *find_header(request_t *request, const char* name);
 
 int main(int argc, char **argv) 
 {
@@ -102,11 +103,8 @@ void doit(int fd, request_t *request)
 
     read_requesthdrs(&rio, request);
 
-    for (int i=0; i<request->header_count; i++)
-        printf("[%d] %s: %s\n", i, request->headers[i].name, request->headers[i].value);
-
     /* Parse URI from request */
-    request->is_static = parse_uri(request->uri, request->filename, request->cgiargs);
+    request->is_static = parse_uri(request->uri, request->filename, request->query_string);
     if (stat(request->filename, &sbuf) < 0) {                     
         clienterror(fd, request->filename, "404", "Not found",
 		    "Tiny couldn't find this file");
@@ -114,29 +112,62 @@ void doit(int fd, request_t *request)
     }                                                    
 
     if (request->is_static) { /* Serve static content */
-        if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) { 
-            clienterror(fd, request->filename, "403", "Forbidden",
-                "Tiny couldn't read the file");
-            return;
-        }
         if (0 != strcasecmp(request->method, "GET")) {
             clienterror(fd, request->method, "405", "Method Not Allowed",
                     "This method is not supported by the target resource");
             return;
         }
+        if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) { 
+            clienterror(fd, request->filename, "403", "Forbidden",
+                "Tiny couldn't read the file");
+            return;
+        }
         serve_static(fd, request->method, request->filename, sbuf.st_size);
     }
     else { /* Serve dynamic content */
+        if (0 != strcasecmp(request->method, "POST")) {
+            clienterror(fd, request->method, "405", "Method Not Allowed",
+                    "This method is not supported by the target resource");
+            return;
+        }
+
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) { 
             clienterror(fd, request->filename, "403", "Forbidden",
                 "Tiny couldn't run the CGI program");
             return;
         }
-        serve_dynamic(fd, request->method, request->filename, request->cgiargs);
+
+        /* only accept application/x-www-form-urlencoded */
+        char *content_type = find_header(request, "Content-Type");
+        if (0 != strcasecmp(content_type, "application/x-www-form-urlencoded")) {
+            clienterror(fd, content_type, "415", "Unsupported Content Type",
+                "This server only accepts POST requests with Content-Type: application/x-www-form-urlencoded");
+            return;
+        }
+
+        /* require Content-Length */
+        char *content_length = find_header(request, "Content-Length");
+        if (content_length == NULL) {
+            clienterror(fd, content_length, "411", "Length Required",
+                "This server requires POST requests to contain a Content-Length header");
+            return;
+        }
+               
+        /* Read request body */
+        Rio_readlineb(&rio, buf, atoi(content_length)+1);
+        strcpy(request->body, buf);
+
+        serve_dynamic(fd, request->method, request->filename, request->body);
     }
 }
 /* $end doit */
-
+char *find_header(request_t *request, const char* name) {
+    for (int i=0, count=request->header_count; i<count; i++) {
+        if (0 == strcasecmp(name, request->headers[i].name))
+            return request->headers[i].value;
+    }
+    return NULL;
+}
 
 void reset_request(request_t *request) {
     request->is_static = 0;
@@ -184,12 +215,12 @@ void read_requesthdrs(rio_t *rp, request_t *request)
  *             return 0 if dynamic content, 1 if static
  */
 /* $begin parse_uri */
-int parse_uri(char *uri, char *filename, char *cgiargs) 
+int parse_uri(char *uri, char *filename, char *query_string) 
 {
     char *ptr;
 
     if (!strstr(uri, "cgi-bin")) {  /* Static content */ 
-        strcpy(cgiargs, "");                             
+        strcpy(query_string, "");                             
         strcpy(filename, ".");                           
         strcat(filename, uri);                           
         if (uri[strlen(uri)-1] == '/')                   
@@ -199,11 +230,11 @@ int parse_uri(char *uri, char *filename, char *cgiargs)
     else {  /* Dynamic content */                        
         ptr = index(uri, '?');                           
         if (ptr) {
-            strcpy(cgiargs, ptr+1);
+            strcpy(query_string, ptr+1);
             *ptr = '\0';
         }
         else 
-            strcpy(cgiargs, "");                         
+            strcpy(query_string, "");                         
         strcpy(filename, ".");                           
         strcat(filename, uri);                           
         return 0;
@@ -276,7 +307,7 @@ void reap_children(int signum) {
  * serve_dynamic - run a CGI program on behalf of the client
  */
 /* $begin serve_dynamic */
-void serve_dynamic(int fd, char *method, char *filename, char *cgiargs) 
+void serve_dynamic(int fd, char *method, char *filename, char *query_string) 
 {
     char buf[MAXLINE], *emptylist[] = { NULL };
 
@@ -289,7 +320,7 @@ void serve_dynamic(int fd, char *method, char *filename, char *cgiargs)
     if (Fork() == 0) { /* Child */
         /* Real server would set all CGI vars here */
         setenv("METHOD", method, 1);
-        setenv("QUERY_STRING", cgiargs, 1); 
+        setenv("QUERY_STRING", query_string, 1); 
         Dup2(fd, STDOUT_FILENO);         /* Redirect stdout to client */ 
         Execve(filename, emptylist, environ); /* Run CGI program */ 
     }
