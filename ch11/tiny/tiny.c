@@ -38,6 +38,8 @@ void clienterror(int fd, char *cause, char *errnum,
 void reap_children(int signum);
 void reset_request(request_t *request);
 char *find_header(request_t *request, const char* name);
+void server_write(int fd, void *usrbuf, size_t n);
+
 
 int main(int argc, char **argv) 
 {
@@ -55,6 +57,7 @@ int main(int argc, char **argv)
     request_t *request = Malloc(sizeof(request_t));
 
     Signal(SIGCHLD, reap_children);
+    Signal(SIGPIPE, SIG_IGN);
 
     listenfd = Open_listenfd(argv[1]);
 
@@ -254,13 +257,13 @@ void serve_static(int fd, char *method, char *filename, int filesize)
     /* Send response headers to client */
     get_filetype(filename, filetype);    
     sprintf(buf, "HTTP/1.0 200 OK\r\n"); 
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "Server: Tiny Web Server\r\n");
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "Content-length: %d\r\n", filesize);
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "Content-type: %s\r\n\r\n", filetype);
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
 
     if (!strcasecmp(method, "HEAD"))
         return;
@@ -270,9 +273,21 @@ void serve_static(int fd, char *method, char *filename, int filesize)
     srcp = (char *)Malloc(filesize);
     Rio_readn(srcfd, srcp, filesize);
     Close(srcfd);
-    Rio_writen(fd, srcp, filesize);
+    server_write(fd, srcp, filesize);
     Free(srcp);
 }
+
+ 
+void server_write(int fd, void *usrbuf, size_t n) {
+    if (rio_writen(fd, usrbuf, n) != n) {
+        if (errno == EPIPE) {
+            /* ignore EPIPE */
+        } else {
+            unix_error("server_write error");
+        }
+    }
+}
+
 
 /*
  * get_filetype - derive file type from file name
@@ -313,9 +328,9 @@ void serve_dynamic(int fd, char *method, char *filename, char *query_string)
 
     /* Return first part of HTTP response */
     sprintf(buf, "HTTP/1.0 200 OK\r\n"); 
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "Server: Tiny Web Server\r\n");
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
   
     if (Fork() == 0) { /* Child */
         /* Real server would set all CGI vars here */
@@ -338,20 +353,20 @@ void clienterror(int fd, char *cause, char *errnum,
 
     /* Print the HTTP response headers */
     sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "Content-type: text/html\r\n\r\n");
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
 
     /* Print the HTTP response body */
     sprintf(buf, "<html><title>Tiny Error</title>");
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "<body bgcolor=""ffffff"">\r\n");
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "%s: %s\r\n", errnum, shortmsg);
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "<p>%s: %s\r\n", longmsg, cause);
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
     sprintf(buf, "<hr><em>The Tiny Web server</em>\r\n");
-    Rio_writen(fd, buf, strlen(buf));
+    server_write(fd, buf, strlen(buf));
 }
 /* $end clienterror */
