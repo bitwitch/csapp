@@ -105,7 +105,7 @@ int main(void) {
     char buf[4096];
     char *list_buf[64];
 
-    gethostbyname_ts("www.homestarrunner.com", &host, buf, 4096, list_buf, sizeof(list_buf));
+    gethostbyname_ts("www.homestarrunner.com", &host, buf, sizeof(buf), list_buf, sizeof(list_buf));
 
     print_hostent(&host);
     
