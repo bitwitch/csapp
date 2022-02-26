@@ -35,20 +35,26 @@ typedef struct {
 typedef struct {                           /* Represents a pool of connected descriptors */ 
     int maxfd;                             /* Largest descriptor in read_set */   
     fd_set read_set;                       /* Set of all active read descriptors */
-    fd_set ready_set;                      /* Subset of descriptors ready for reading  */
-    int nready;                            /* Number of read ready descriptors from select */   
+    fd_set read_ready_set;                 /* Subset of descriptors ready for reading  */
+    fd_set write_set;                      /* Set of all active write descriptors */
+    fd_set write_ready_set;                /* Subset of descriptors ready for writing  */
+    int nready_read;                       /* Number of read ready descriptors from select */   
+    int nready_write;                      /* Number of write ready descriptors from select */   
     int maxi;                              /* Highwater index into client array */
     int client_fds[FD_SETSIZE];            /* Set of active descriptors */
     rio_t client_rios[FD_SETSIZE];         /* Set of active read buffers */
     request_t client_requests[FD_SETSIZE]; /* Set of active requests */
-} pool_t;
+} pool_t; 
 
 void init_pool(int listenfd, pool_t *p);
 void add_client(int connfd, pool_t *p);
 void check_clients(pool_t *p);
-int byte_count = 0; /* Counts total bytes received by server */
+int byte_cnt = 0; /* Counts total bytes received by server */
 
-void handle_request(int fd, rio_t *rio, request_t *request);
+/*int prepare_response(connection_t *conn);*/
+int parse_request_line(int connfd, request_t *request, char *line);
+int parse_request_header(request_t *request, char *line);
+int parse_request_body(int connfd, request_t *request, char *line);
 int parse_uri(char *uri, char *filename, char *query_string);
 void serve_static(int fd, char *method, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
@@ -58,7 +64,8 @@ void clienterror(int fd, char *cause, char *errnum,
 void reap_children(int signum);
 char *find_header(request_t *request, const char* name);
 void server_write(int fd, void *usrbuf, size_t n);
-void read_requesthdrs(rio_t *rp, request_t *request);
+void remove_connection(int *connections, int *con_count, int connfd);
+int handle_request_errors(int connfd, request_t *request);
 
 
 int main(int argc, char **argv) 
@@ -83,11 +90,12 @@ int main(int argc, char **argv)
 
     while (1) {
         /* get the ready fds */
-        pool.ready_set  = pool.read_set;
-        pool.nready = Select(pool.maxfd+1, &pool.ready_set, NULL, NULL, NULL);
+        pool.read_ready_set  = pool.read_set;
+        pool.write_ready_set = pool.write_set;
+        pool.nready_read = Select(pool.maxfd+1, &pool.read_ready_set, &pool.write_ready_set, NULL, NULL);
 
         /* if it is a new connection, accept it */
-        if (FD_ISSET(listenfd, &pool.ready_set)) {
+        if (FD_ISSET(listenfd, &pool.read_ready_set)) {
             clientlen = sizeof(clientaddr);
             connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
             Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAXLINE, 
@@ -122,7 +130,7 @@ void init_pool(int listenfd, pool_t *p)
 void add_client(int connfd, pool_t *p) 
 {
     int i;
-    p->nready--;
+    p->nready_read--;
     for (i = 0; i < FD_SETSIZE; i++)  /* Find an available slot */
         if (p->client_fds[i] < 0) { 
             /* Add connected descriptor to the pool */
@@ -152,107 +160,135 @@ void check_clients(pool_t *p) {
     rio_t *rio;
     request_t *request;
 
-    for (i = 0; (i <= p->maxi) && (p->nready > 0); i++) {
-        connfd = p->client_fds[i];
-        rio = &p->client_rios[i];
+    for (i = 0; i <= p->maxi && (p->nready_read > 0 || p->nready_write > 0); i++) {
+        connfd  =  p->client_fds[i];
+        rio     = &p->client_rios[i];
         request = &p->client_requests[i];
 
-        /* If the descriptor is ready, echo a text line from it */
-        if ((connfd > 0) && (FD_ISSET(connfd, &p->ready_set))) { 
-            p->nready--;
-            handle_request(connfd, rio, request);
-            Close(connfd); 
-            FD_CLR(connfd, &p->read_set); 
-            p->client_fds[i] = -1;
+        /* If the descriptor is read-ready, read a line of the request */
+        if ((connfd >= 0) && (FD_ISSET(connfd, &p->read_ready_set))) {
+            p->nready_read--;
+            int rc;
+            while (!request->request_line_done ||
+                   (request->is_static && !request->headers_done) || 
+                   (!request->is_static && !request->body_done))
+            {
+                n = Rio_readlineb(rio, line, MAXLINE);
+                if (n == 0) break;
+                byte_cnt += n; 
+                printf("Server received %d bytes on fd %d (%d total)\n",
+                        n, connfd, byte_cnt);
+                rc = parse_request_line(connfd, request, line);
+            }
+
+            if (rc == SUCCESS) {
+                /* move descriptor to write ready set */
+                FD_CLR(connfd, &p->read_set);
+                FD_SET(connfd, &p->write_set);
+
+            } else  {
+                printf("closing connection\n");
+                Close(connfd);
+                FD_CLR(connfd, &p->read_set);
+                p->client_fds[i] = -1;
+            }
+        }
+
+        /* If the descriptor is write-ready, write a line to the client */
+        if ((connfd >= 0) && (FD_ISSET(connfd, &p->write_ready_set))) {
+            p->nready_write--;
+            if (request->is_static)
+                serve_static(connfd, );
+            else
+                serve_dynamic(connfd);
         }
     }
 }
 
-
-/*
- * handle_request - handle one HTTP request/response transaction
- */
-void handle_request(int fd, rio_t *rio, request_t *request) 
-{
+int handle_request_errors(int connfd, request_t *request) {
+    /* handle request errors */
     struct stat sbuf;
-    char line[MAXLINE];
-    int n = Rio_readlineb(rio, line, MAXLINE);
-    if (n  == 0)
-        return;
-
-    byte_count += n; 
-    printf("Server received %d bytes on fd %d (%d total)\n",
-            n, fd, byte_count);
-
-    sscanf(line, "%s %s %s", request->method, request->uri, request->version);
-
-    if (0 != strcasecmp(request->method, "GET") && 
-        0 != strcasecmp(request->method, "HEAD") &&  
-        0 != strcasecmp(request->method, "POST")) 
-    {
-        clienterror(fd, request->method, "501", "Not Implemented",
-                    "Tiny does not implement this method");
-        return;
-    }
-
-    read_requesthdrs(rio, request);
-
-    /* Parse URI from request */
-    request->is_static = parse_uri(request->uri, request->filename, request->query_string);
-    if (stat(request->filename, &sbuf) < 0) {                     
-        clienterror(fd, request->filename, "404", "Not found",
-		    "Tiny couldn't find this file");
-        return;
+    if (stat(request->filename, &sbuf) < 0) {
+        clienterror(connfd, request->filename, "404", "Not found",
+            "Tiny couldn't find this file");
+        return CLIENT_ERROR;
     }                                                    
 
-    if (request->is_static) { /* Serve static content */
+    if (request->is_static) { 
         if (0 != strcasecmp(request->method, "GET")) {
-            clienterror(fd, request->method, "405", "Method Not Allowed",
+            clienterror(connfd, request->method, "405", "Method Not Allowed",
                     "This method is not supported by the target resource");
-            return;
+            return CLIENT_ERROR;
         }
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) { 
-            clienterror(fd, request->filename, "403", "Forbidden",
-                "Tiny couldn't read the file");
-            return;
+            clienterror(connfd, request->filename, "403", "Forbidden",
+                "Access denied.");
+            return CLIENT_ERROR;
         }
-        serve_static(fd, request->method, request->filename, sbuf.st_size);
-    }
-    else { /* Serve dynamic content */
+    } else { /* request for dynamic content */
         if (0 != strcasecmp(request->method, "POST")) {
-            clienterror(fd, request->method, "405", "Method Not Allowed",
+            clienterror(connfd, request->method, "405", "Method Not Allowed",
                     "This method is not supported by the target resource");
-            return;
+            return CLIENT_ERROR;
         }
 
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) { 
-            clienterror(fd, request->filename, "403", "Forbidden",
+            clienterror(connfd, request->filename, "403", "Forbidden",
                 "Tiny couldn't run the CGI program");
-            return;
+            return CLIENT_ERROR;
         }
 
         /* only accept application/x-www-form-urlencoded */
         char *content_type = find_header(request, "Content-Type");
         if (0 != strcasecmp(content_type, "application/x-www-form-urlencoded")) {
-            clienterror(fd, content_type, "415", "Unsupported Content Type",
+            clienterror(connfd, content_type, "415", "Unsupported Content Type",
                 "This server only accepts POST requests with Content-Type: application/x-www-form-urlencoded");
-            return;
+            return CLIENT_ERROR;
         }
 
         /* require Content-Length */
         char *content_length = find_header(request, "Content-Length");
         if (content_length == NULL) {
-            clienterror(fd, content_length, "411", "Length Required",
+            clienterror(connfd, content_length, "411", "Length Required",
                 "This server requires POST requests to contain a Content-Length header");
-            return;
+            return CLIENT_ERROR;
         }
-               
-        /* Read request body */
-        Rio_readlineb(rio, line, atoi(content_length)+1);
-        strcpy(request->body, line);
-
-        serve_dynamic(fd, request->method, request->filename, request->body);
     }
+    return SUCCESS;
+}
+
+
+int parse_request_line(int connfd, request_t *request, char *line)
+{
+    printf("parse_request_line => %s", line);
+
+    /* Parse request line if not already done */
+    if (!request->request_line_done) {
+        sscanf(line, "%s %s %s", request->method, request->uri, request->version);
+        request->request_line_done = true;
+
+        if (0 != strcasecmp(request->method, "GET") && 
+            0 != strcasecmp(request->method, "HEAD") &&  
+            0 != strcasecmp(request->method, "POST")) 
+        {
+            clienterror(connfd, request->method, "501", "Not Implemented",
+                        "Tiny does not implement this method");
+            return CLIENT_ERROR;
+        }
+
+        /* Parse URI from request */
+        request->is_static = parse_uri(request->uri, request->filename, request->query_string);
+
+        if (handle_request_errors(connfd, request) == CLIENT_ERROR)
+            return CLIENT_ERROR;
+
+    } 
+    else if (!request->headers_done)
+        return parse_request_header(request, line);
+    else if (!request->body_done)
+        return parse_request_body(connfd, request, line);
+
+    return SUCCESS;
 }
 
 char *find_header(request_t *request, const char* name) {
@@ -263,19 +299,14 @@ char *find_header(request_t *request, const char* name) {
     return NULL;
 }
 
-
-/*
- * read_requesthdrs - read HTTP request headers
- */
-void read_requesthdrs(rio_t *rp, request_t *request)
+/* NOTE(shaw): this is not robust header parsing, the server will crash if
+ * headers are not formatted correctly */
+int parse_request_header(request_t *request, char *line)
 {
-    char line[MAXLINE];
-    ssize_t header_bytes;
     http_header_t *headers = request->headers;
     char *p = request->headers_buffer;
 
-    header_bytes = Rio_readlineb(rp, line, MAXLINE);
-    while(strcmp(line, "\r\n")) {
+    if (0 != strcmp(line, "\r\n")) {
         strcpy(p, line);
 
         /* get header value */
@@ -291,10 +322,34 @@ void read_requesthdrs(rio_t *rp, request_t *request)
         
         p = newline + 1;
         request->header_count++;
-        header_bytes = Rio_readlineb(rp, line, MAXLINE);
+    } else {
+        request->headers_done = true;
     }
-    return;
+    return SUCCESS;
 }
+
+int parse_request_body(int connfd, request_t *request, char *line) {
+    char *str_content_length = find_header(request, "Content-Length");
+    int content_length = atoi(str_content_length) + 1;
+    int bytes_read = strlen(request->body);
+    int bytes_remaining = content_length - bytes_read;
+
+    strncpy(request->body, line, bytes_remaining);
+
+    if (bytes_read == content_length) {
+        request->body_done = true;
+    } else if (bytes_read > content_length) {
+        fprintf(stderr, "Expected to read a max of %d bytes from the request body, but read %d\n", 
+                content_length, bytes_read);
+        clienterror(connfd, "Request Body", "500", 
+                "Failed to parse the request body", 
+                "Failed to parse the request body");
+        return CLIENT_ERROR;
+    }
+
+    return SUCCESS;
+}
+
 
 /*
  * parse_uri - parse URI into filename and CGI args
@@ -308,9 +363,9 @@ int parse_uri(char *uri, char *filename, char *query_string)
         strcpy(query_string, "");                             
         strcpy(filename, ".");                           
         strcat(filename, uri);                           
-        if (uri[strlen(uri)-1] == '/')                   
+        if (uri[strlen(uri)-1] == '/')
             strcat(filename, "home.html");               
-            return 1;
+        return 1;
     }
     else {  /* Dynamic content */                        
         ptr = index(uri, '?');                           
@@ -346,7 +401,7 @@ void serve_static(int fd, char *method, char *filename, int filesize)
     server_write(fd, buf, strlen(buf));
 
     if (!strcasecmp(method, "HEAD"))
-        return;
+        return RESPONSE_COMPLETE;
 
     /* Send response body to client */
     srcfd = Open(filename, O_RDONLY, 0); 
@@ -356,7 +411,6 @@ void serve_static(int fd, char *method, char *filename, int filesize)
     server_write(fd, srcp, filesize);
     Free(srcp);
 }
-
  
 void server_write(int fd, void *usrbuf, size_t n) {
     if (rio_writen(fd, usrbuf, n) != n) {
@@ -387,7 +441,6 @@ void get_filetype(char *filename, char *filetype)
     else
         strcpy(filetype, "text/plain");
 }  
-/* $end serve_static */
 
 
 /* SIGCHLD handler */
@@ -397,6 +450,8 @@ void reap_children(int signum) {
         cpid = wait(NULL);
     } while(cpid != -1 && errno != ECHILD);
 }
+
+#if 0
 
 /*
  * serve_dynamic - run a CGI program on behalf of the client
@@ -417,6 +472,7 @@ void serve_dynamic(int fd, char *method, char *filename, char *query_string)
     Dup2(fd, STDOUT_FILENO);         /* Redirect stdout to client */ 
     Execve(filename, emptylist, environ); /* Run CGI program */ 
 }
+#endif
 
 /*
  * clienterror - returns an error message to the client
