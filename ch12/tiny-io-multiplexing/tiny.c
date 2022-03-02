@@ -9,13 +9,6 @@
 #define MAX_REQUEST_BODY_BYTES 2048
 #define MAX_HEADERS_BYTES 2048
 
-#define CLIENT_ERROR        (-1)
-#define EMPTY_REQUEST       (-2)
-#define END_REQUEST_HEADERS (-3)
-#define END_REQUEST_BODY    (-4)
-#define SUCCESS             (0)
-
-
 typedef struct {
     char *name;
     char *value;
