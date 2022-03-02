@@ -1,0 +1,3 @@
+#!/bin/bash
+gcc -pthread -I../.. -ggdb -o server tiny.c ../../csapp.c
+gcc -pthread -I../.. -o cgi-bin/adder cgi-bin/adder.c ../../csapp.c
